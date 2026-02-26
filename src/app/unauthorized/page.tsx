@@ -10,4 +10,5 @@ export default async function UnauthorizedPage() {
     : undefined
 
   return <UnauthorizedContent bgUrl={bgUrl} />
+  
 }
