@@ -30,7 +30,7 @@ export default function Cursor() {
   // Ring: expands on hover, shrinks on click
   const ringScaleRaw = useTransform(
     [isHovering, isClicking] as MotionValue<number>[],
-    ([h, c]: number[]) => (h ? 2.2 : c ? 0.7 : 1),
+    ([h, c]: number[]): number => (h ? 2.2 : c ? 0.7 : 1),
   )
   const ringScale = useSpring(ringScaleRaw, { damping: 20, stiffness: 200 })
 
