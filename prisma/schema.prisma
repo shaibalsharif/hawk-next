@@ -1,0 +1,159 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Home ────────────────────────────────────────────────────
+model HomeSlide {
+  id       String @id @default(cuid())
+  videoId  String
+  title    String
+  subtitle String
+  category String
+  order    Int    @default(0)
+}
+
+// ─── About ───────────────────────────────────────────────────
+model AboutCover {
+  id        String  @id @default("singleton")
+  title     String  @default("")
+  sub       String  @default("")
+  points    String[]
+  imageMeta Json?
+}
+
+model AboutInner {
+  id          String @id @default("singleton")
+  title       String @default("")
+  description String @default("")
+}
+
+model TeamMember {
+  id           String @id @default(cuid())
+  name         String
+  position     String
+  imageMeta    Json?
+  displayOrder Int    @default(0)
+}
+
+// ─── Services ────────────────────────────────────────────────
+model ServicesCover {
+  id        String @id @default("singleton")
+  title     String @default("")
+  sub       String @default("")
+  imageMeta Json?
+}
+
+model ServicesInner {
+  id        String @id @default("singleton")
+  title     String @default("")
+  sub       String @default("")
+  imageMeta Json?
+  details   String @default("")
+}
+
+model ServiceItem {
+  id           String @id @default(cuid())
+  name         String
+  details      String @default("")
+  imageMeta    Json?
+  displayOrder Int    @default(0)
+}
+
+model ClientItem {
+  id           String @id @default(cuid())
+  name         String
+  imageMeta    Json?
+  displayOrder Int    @default(0)
+}
+
+// ─── Portfolio ───────────────────────────────────────────────
+model PortfolioCategory {
+  id           String          @id @default(cuid())
+  name         String
+  details      String          @default("")
+  imageMeta    Json?
+  displayOrder Int             @default(0)
+  items        PortfolioItem[]
+}
+
+model PortfolioItem {
+  id           String             @id @default(cuid())
+  categoryId   String
+  category     PortfolioCategory  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  title        String
+  client       String             @default("")
+  year         Int                @default(2024)
+  role         String             @default("")
+  coverMeta    Json?
+  description  String             @default("")
+  takeaways    String[]
+  displayOrder Int                @default(0)
+  images       PortfolioImage[]
+}
+
+model PortfolioImage {
+  id           String        @id @default(cuid())
+  itemId       String
+  item         PortfolioItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  imageMeta    Json
+  displayOrder Int           @default(0)
+}
+
+// ─── Contact ─────────────────────────────────────────────────
+model ContactCover {
+  id    String @id @default("singleton")
+  title String @default("")
+  sub   String @default("")
+}
+
+model ContactItem {
+  id           String      @id @default(cuid())
+  type         ContactType
+  value        String
+  displayOrder Int         @default(0)
+}
+
+model SocialLink {
+  id           String @id @default(cuid())
+  platform     String
+  url          String
+  displayOrder Int    @default(0)
+}
+
+// ─── Media garbage tracking ───────────────────────────────────
+model MediaFile {
+  id         String        @id @default(cuid())
+  fileKey    String        @unique
+  fileUrl    String
+  provider   MediaProvider
+  entityType String
+  entityId   String
+  uploadedAt DateTime      @default(now())
+  size       Int?
+}
+
+// ─── Super Admins ─────────────────────────────────────────────
+model SuperAdmin {
+  uid     String   @id               // Firebase UID
+  email   String   @unique
+  addedAt DateTime @default(now())
+}
+
+// ─── Enums ───────────────────────────────────────────────────
+enum ContactType {
+  EMAIL
+  PHONE
+  ADDRESS
+}
+
+enum MediaProvider {
+  UPLOADTHING
+  GDRIVE
+  YOUTUBE
+  URL
+}

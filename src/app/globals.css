@@ -1,0 +1,476 @@
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;700&family=Montserrat:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+/* ── Tailwind v4 Theme ─────────────────────────────────── */
+@theme {
+  /* Brand colors */
+  --color-yellow-1: #F8F4EB;
+  --color-yellow-2: #fcda02;
+  --color-light-1: #EFEFEF;
+  --color-light-2: #F5F5F5;
+  --color-dark-1: #111517;
+  --color-dark-2: #1B2A2F;
+  --color-dark-3: #262626;
+
+  /* Font families */
+  --font-oswald: 'Oswald', sans-serif;
+  --font-montserrat: 'Montserrat', sans-serif;
+
+  /* Breakpoints — match original app */
+  --breakpoint-xs: 480px;
+  --breakpoint-sm: 768px;
+  --breakpoint-md: 1060px;
+}
+
+/* ── Base reset ────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* Hide native cursor only on pointer-fine (mouse) devices */
+@media (pointer: fine) {
+  *, *::before, *::after {
+    cursor: none !important;
+  }
+}
+
+html,
+body {
+  height: 100%;
+  width: 100%;
+  font-family: 'Oswald', sans-serif;
+  color: #ffffff;
+  background-color: #111517;
+  scroll-behavior: smooth;
+}
+
+::selection {
+  background: #fcda02;
+  color: #111517;
+}
+
+/* ── Restore native cursor for admin / login ───────────── */
+/* The global `cursor: none !important` above hides the native cursor
+   everywhere. Admin and login use this class to bring it back. */
+.native-cursor,
+.native-cursor *,
+.native-cursor *::before,
+.native-cursor *::after {
+  cursor: auto !important;
+}
+.native-cursor a,
+.native-cursor button,
+.native-cursor [role="button"],
+.native-cursor [tabindex]:not([tabindex="-1"]),
+.native-cursor input[type="submit"],
+.native-cursor input[type="button"],
+.native-cursor input[type="checkbox"],
+.native-cursor input[type="radio"],
+.native-cursor select,
+.native-cursor label,
+.native-cursor [data-hover] {
+  cursor: pointer !important;
+}
+
+/* ── Cursor ────────────────────────────────────────────── */
+.cursor-dot {
+  position: fixed;
+  top: -4px;
+  left: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fcda02;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.cursor-ring {
+  position: fixed;
+  top: -20px;
+  left: -20px;
+  width: 40px;
+  height: 40px;
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  z-index: 9998;
+  pointer-events: none;
+}
+
+/* ── Scroll-reveal utility ─────────────────────────────── */
+.reveal-up {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.8s cubic-bezier(0.76, 0, 0.24, 1),
+              transform 0.8s cubic-bezier(0.76, 0, 0.24, 1);
+}
+.reveal-up.in-view {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Image clip-path reveal ────────────────────────────── */
+.img-reveal-wrap {
+  overflow: hidden;
+}
+.img-reveal {
+  clip-path: inset(100% 0 0 0);
+  transform: scale(1.08);
+  transition: clip-path 1s cubic-bezier(0.76, 0, 0.24, 1),
+              transform 1s cubic-bezier(0.76, 0, 0.24, 1);
+}
+.img-reveal.in-view {
+  clip-path: inset(0% 0 0 0);
+  transform: scale(1);
+}
+
+/* ── Xen-style underline button ────────────────────────── */
+.xen-btn {
+  position: relative;
+  display: inline-block;
+  font-family: 'Oswald', sans-serif;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-size: 0.75rem;
+  padding: 0.75rem 2rem;
+  border: 1px solid currentColor;
+  transition: background 0.35s ease, color 0.35s ease;
+}
+.xen-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: #fcda02;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.35s cubic-bezier(0.76, 0, 0.24, 1);
+  z-index: -1;
+}
+.xen-btn:hover {
+  color: #111517;
+  border-color: #fcda02;
+}
+.xen-btn:hover::after {
+  transform: scaleX(1);
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+.header-container {
+  width: 100%;
+  z-index: 10;
+  height: 5rem;
+  display: flex;
+  padding: 1rem;
+  justify-content: space-between;
+  align-items: center;
+  position: fixed;
+  top: 0;
+  left: 0;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.75) 0%, rgba(0, 0, 0, 0) 100%);
+}
+
+.logo-img {
+  height: 100%;
+}
+
+.nav-open {
+  width: 3rem;
+  height: 3rem;
+  transition: opacity 0.2s ease;
+}
+.nav-open:hover {
+  opacity: 0.65;
+}
+
+/* ── Full-screen nav overlay ── */
+.nav-container {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: #111517;
+  overflow: hidden;
+}
+
+.nav-header {
+  height: 5rem;
+  display: flex;
+  padding: 1rem;
+  justify-content: space-between;
+  width: 100%;
+  align-items: center;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+}
+
+.nav-close {
+  width: 3rem;
+  height: 3rem;
+  transition: transform 0.35s ease, opacity 0.25s ease;
+}
+.nav-close:hover {
+  transform: rotate(90deg);
+  opacity: 0.6;
+}
+
+/* ── Nav links ── */
+.nav-link-container {
+  height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding-left: clamp(2rem, 8vw, 6rem);
+  gap: 0.15rem;
+}
+
+.nav-link {
+  position: relative;
+  font-family: 'Oswald', sans-serif;
+  font-weight: 700;
+  font-size: clamp(2.2rem, 5.5vw, 4.5rem);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #ffffff;
+  line-height: 1.1;
+  padding: 0.15em 0;
+  transition: color 0.3s ease;
+  overflow: hidden;
+  display: inline-block;
+}
+
+.nav-link::after {
+  content: '';
+  position: absolute;
+  bottom: 0.1em;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: #fcda02;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.45s cubic-bezier(0.76, 0, 0.24, 1);
+}
+
+.nav-link:hover {
+  color: #fcda02;
+}
+
+.nav-link:hover::after {
+  transform: scaleX(1);
+}
+
+/* ── Home / Hero ─────────────────────────────────────────── */
+.home-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #111517;
+}
+
+.video-back {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  transform: scale(800%);
+}
+
+@media (min-width: 1060px) {
+  .video-back {
+    transform: scale(200%);
+  }
+}
+
+.video-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to right,
+    rgba(17, 21, 23, 0.85) 0%,
+    rgba(17, 21, 23, 0.45) 50%,
+    rgba(17, 21, 23, 0.1) 100%
+  );
+  z-index: 1;
+}
+
+.hero-content {
+  position: absolute;
+  left: 1.25rem;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+  overflow: hidden;
+  max-width: 72vw;
+}
+
+@media (min-width: 1060px) {
+  .hero-content {
+    left: 3rem;
+    max-width: 55vw;
+  }
+}
+
+.hero-subtitle {
+  font-family: 'Oswald', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: #fcda02;
+  margin-bottom: 0.9rem;
+}
+
+.hero-title {
+  font-family: 'Oswald', sans-serif;
+  font-weight: 700;
+  font-size: clamp(2.2rem, 5.5vw, 5rem);
+  text-transform: uppercase;
+  line-height: 1.05;
+  max-width: 14ch;
+  color: #ffffff;
+  letter-spacing: 0.02em;
+}
+
+.slide-counter {
+  position: absolute;
+  right: 2rem;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+@media (min-width: 1060px) {
+  .slide-counter {
+    right: 2.5rem;
+  }
+}
+
+.counter-current {
+  font-family: 'Oswald', sans-serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #fcda02;
+  line-height: 1;
+}
+
+.counter-divider {
+  width: 1px;
+  height: 2.5rem;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.counter-total {
+  font-family: 'Oswald', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 300;
+  color: rgba(255, 255, 255, 0.4);
+  line-height: 1;
+}
+
+.video-category {
+  position: absolute;
+  left: 2rem;
+  bottom: 5.5rem;
+  z-index: 3;
+  font-family: 'Oswald', sans-serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+@media (min-width: 1060px) {
+  .video-category {
+    left: 3rem;
+    bottom: 2.5rem;
+  }
+}
+
+.video-change-panel {
+  position: absolute;
+  bottom: 2.5rem;
+  right: 2rem;
+  z-index: 3;
+  display: flex;
+  gap: 0.6rem;
+}
+
+@media (min-width: 1060px) {
+  .video-change-panel {
+    right: 2.5rem;
+    bottom: 2.5rem;
+  }
+}
+
+.change-button {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+  flex-shrink: 0;
+}
+
+.change-button:hover {
+  background: #fcda02;
+  border-color: #fcda02;
+  color: #111517;
+}
+
+.change-button svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.slide-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: #fcda02;
+  z-index: 3;
+  transform-origin: left;
+}
+
+/* ── Scrollbar hide ─────────────────────────────────────── */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ── Section utilities ──────────────────────────────────── */
+.section-label {
+  font-family: 'Oswald', sans-serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  color: #fcda02;
+}
+
+.section-title {
+  font-family: 'Oswald', sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1.05;
+}
