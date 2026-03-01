@@ -1,14 +1,31 @@
 /**
  * Add or remove a superadmin by email.
  *
- * Usage:
+ * Usage (run from project root):
  *   node scripts/add-superadmin.mjs add someone@example.com
  *   node scripts/add-superadmin.mjs remove someone@example.com
- *
- * Requires DATABASE_URL and Firebase Admin env vars to be set.
- * Run from the project root:
- *   export $(cat .env.local | grep -v '^#' | xargs) && node scripts/add-superadmin.mjs add you@example.com
  */
+
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
+
+// Load .env.local directly — handles multiline private key correctly
+try {
+  const envContent = readFileSync(resolve(process.cwd(), '.env.local'), 'utf-8')
+  for (const line of envContent.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const idx = trimmed.indexOf('=')
+    if (idx === -1) continue
+    const key = trimmed.slice(0, idx).trim()
+    let val = trimmed.slice(idx + 1).trim()
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1)
+    }
+    val = val.replace(/\\n/g, '\n')
+    if (!process.env[key]) process.env[key] = val
+  }
+} catch { /* env file not found — assume vars already set */ }
 
 import { PrismaClient } from '@prisma/client'
 import { initializeApp, getApps, cert } from 'firebase-admin/app'

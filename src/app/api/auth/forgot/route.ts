@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { buildCustomResetUrl } from '@/lib/reset-link'
-import { sendPasswordResetEmail } from '@/lib/email'
+import { sendFirebaseResetEmail } from '@/lib/firebase-email'
 
 export const runtime = 'nodejs'
 
@@ -9,10 +8,9 @@ export async function POST(req: NextRequest) {
   if (!email) return NextResponse.json({ error: 'Email required' }, { status: 400 })
 
   try {
-    const resetUrl = await buildCustomResetUrl(email)
-    await sendPasswordResetEmail(email, resetUrl)
+    await sendFirebaseResetEmail(email)
   } catch {
-    // Always return success to avoid revealing whether an email exists
+    // Silently succeed — don't reveal whether the email exists
   }
 
   return NextResponse.json({ ok: true })

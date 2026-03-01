@@ -146,5 +146,15 @@ export interface AdminUser {
   uid: string
   email: string | undefined
   displayName: string | undefined
+  photoURL: string | undefined
   disabled: boolean
+  emailVerified: boolean
+  creationTime: string | undefined    // Firebase account created at
+  lastSignInTime: string | undefined  // Firebase last sign-in
+  providers: string[]                 // e.g. ['google.com', 'password']
+  // from AdminLoginMeta DB table
+  lastIp: string | null
+  lastLocation: string | null         // e.g. "Dhaka, Dhaka Division, Bangladesh"
+  lastDevice: string | null           // raw user-agent
+  lastSeenAt: string | null           // last time they hit /api/auth/verify
 }

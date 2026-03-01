@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { adminAuth } from '@/lib/firebase-admin'
 import { requireSuperAdmin } from '@/lib/auth'
 import { buildCustomResetUrl } from '@/lib/reset-link'
-import { sendAdminInviteEmail } from '@/lib/email'
+import { sendAdminInviteEmail } from '@/lib/mailer'
 
 export const runtime = 'nodejs'
 
@@ -43,13 +43,13 @@ export async function POST(req: NextRequest) {
 
   await adminAuth.setCustomUserClaims(uid, { admin: true })
 
-  // Send invite email with password-set link (always, whether new or existing)
+  // Send branded "Activate My Account" invite email
   try {
     const resetUrl = await buildCustomResetUrl(email)
     await sendAdminInviteEmail(email, resetUrl)
   } catch (err) {
     console.error('[invite email]', err)
-    // Don't fail the whole request if email fails — admin was still created
+    // Don't fail the request — admin was still created
   }
 
   const user = await adminAuth.getUser(uid)

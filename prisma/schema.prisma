@@ -137,6 +137,15 @@ model MediaFile {
   size       Int?
 }
 
+// ─── Admin Login Activity ─────────────────────────────────────
+model AdminLoginMeta {
+  uid          String    @id           // Firebase UID
+  lastIp       String?
+  lastLocation String?                 // e.g. "Dhaka, Dhaka Division, Bangladesh"
+  lastDevice   String?                 // raw user-agent
+  lastSeenAt   DateTime?
+}
+
 // ─── Super Admins ─────────────────────────────────────────────
 model SuperAdmin {
   uid     String   @id               // Firebase UID
