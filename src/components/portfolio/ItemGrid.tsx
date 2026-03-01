@@ -2,7 +2,7 @@
 
 import { useRef, useEffect } from 'react'
 import Link from 'next/link'
-import { getMediaUrl } from '@/lib/media'
+import { getMediaUrl, isVideoMeta } from '@/lib/media'
 import type { PortfolioItem } from '@/types'
 
 interface Props {
@@ -47,13 +47,19 @@ export default function ItemGrid({ items, categorySlug }: Props) {
 
   return (
     <div className="flex overflow-x-auto no-scrollbar" ref={listRef}>
-      {items.map((item) => (
+      {items.map((item) => {
+        const mediaUrl = getMediaUrl(item.coverMeta)
+        const isVid = isVideoMeta(item.coverMeta)
+        return (
         <Link
           key={item.id}
           href={`/portfolio/${categorySlug}/${item.id}`}
-          className="relative group bg-cover bg-no-repeat bg-center h-screen min-w-full sm:min-w-[50%] md:min-w-[33%] flex-shrink-0"
-          style={{ backgroundImage: `url(${getMediaUrl(item.coverMeta)})` }}
+          className="relative group h-screen min-w-full sm:min-w-[50%] md:min-w-[33%] flex-shrink-0 overflow-hidden"
+          {...(!isVid && mediaUrl ? { style: { backgroundImage: `url(${mediaUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } } : {})}
         >
+          {isVid && mediaUrl && (
+            <video src={mediaUrl} autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover" />
+          )}
           <div className="absolute inset-0 bg-black/50 group-hover:bg-black/30 transition-colors duration-500" />
 
           {/* Text — always visible on mobile, hover-only on sm+ */}
@@ -63,7 +69,8 @@ export default function ItemGrid({ items, categorySlug }: Props) {
             <p className="text-white/50 text-xs tracking-widest mt-1 sm:mt-2">{item.year}</p>
           </div>
         </Link>
-      ))}
+        )
+      })}
     </div>
   )
 }

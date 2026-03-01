@@ -14,7 +14,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json(cat)
   }
   if (type === 'item') {
-    const item = await prisma.portfolioItem.update({ where: { id }, data })
+    // Strip relation fields — Prisma cannot accept them as plain update data
+    const { images, category, ...itemData } = data
+    void images; void category
+    const item = await prisma.portfolioItem.update({ where: { id }, data: itemData })
     return NextResponse.json(item)
   }
   if (type === 'image') {

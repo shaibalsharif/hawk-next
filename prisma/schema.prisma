@@ -97,11 +97,16 @@ model PortfolioItem {
 }
 
 model PortfolioImage {
-  id           String        @id @default(cuid())
-  itemId       String
-  item         PortfolioItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  imageMeta    Json
-  displayOrder Int           @default(0)
+  id             String        @id @default(cuid())
+  itemId         String
+  item           PortfolioItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  imageMeta      Json
+  displayOrder   Int           @default(0)
+  hidden         Boolean       @default(false)
+  colSpan        Int           @default(1)
+  rowSpan        Int           @default(1)
+  objectFit      String        @default("cover")
+  objectPosition String        @default("center")
 }
 
 // ─── Contact ─────────────────────────────────────────────────

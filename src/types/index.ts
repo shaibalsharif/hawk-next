@@ -1,8 +1,9 @@
 // ── Media ───────────────────────────────────────────────────
 export interface MediaMeta {
   type: 'uploadthing' | 'gdrive' | 'youtube' | 'url'
-  key?: string   // UploadThing file key (used for deletion)
+  key?: string      // UploadThing file key (used for deletion)
   url: string
+  mimeType?: string // e.g. 'video/mp4', 'image/jpeg' — set on upload
 }
 
 // ── Auth ────────────────────────────────────────────────────
@@ -88,6 +89,11 @@ export interface PortfolioImage {
   itemId: string
   imageMeta: MediaMeta
   displayOrder: number
+  hidden: boolean
+  colSpan: number
+  rowSpan: number
+  objectFit: string
+  objectPosition: string
 }
 
 export interface PortfolioItem {

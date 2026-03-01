@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import type { MediaMeta } from '@/types'
-import { getMediaUrl, extractYouTubeId } from '@/lib/media'
+import { getMediaUrl, extractYouTubeId, isVideoMeta } from '@/lib/media'
 import { useUploadThing } from '@/lib/uploadthing-react'
 
 type Tab = 'upload' | 'gdrive' | 'youtube' | 'url'
@@ -23,9 +23,11 @@ export default function MediaInput({ value, onChange, accept = 'image', label = 
   const endpoint = (accept === 'video' ? 'videoUploader' : 'imageUploader') as 'imageUploader' | 'videoUploader'
 
   const { startUpload } = useUploadThing(endpoint, {
-    onClientUploadComplete: (res: { ufsUrl: string; key: string }[]) => {
+    onClientUploadComplete: (res: { ufsUrl: string; key: string; name?: string; type?: string }[]) => {
       if (res?.[0]) {
-        onChange({ type: 'uploadthing', url: res[0].ufsUrl, key: res[0].key })
+        const f = res[0]
+        const mimeType = f.type ?? (f.name?.toLowerCase().endsWith('.mp4') ? 'video/mp4' : undefined)
+        onChange({ type: 'uploadthing', url: f.ufsUrl, key: f.key, ...(mimeType ? { mimeType } : {}) })
       }
       setUploading(false)
     },
@@ -157,6 +159,13 @@ export default function MediaInput({ value, onChange, accept = 'image', label = 
               src={`https://www.youtube.com/embed/${value.url}?mute=1`}
               className="w-full aspect-video"
               allow="accelerometer; autoplay"
+            />
+          ) : isVideoMeta(value) ? (
+            <video
+              src={previewUrl ?? ''}
+              controls
+              playsInline
+              className={`w-full ${previewFit === 'contain' ? 'max-h-64 object-contain' : 'max-h-48'}`}
             />
           ) : (
             previewUrl && (

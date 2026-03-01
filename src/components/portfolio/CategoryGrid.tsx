@@ -3,7 +3,7 @@
 import { useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { getMediaUrl } from '@/lib/media'
+import { getMediaUrl, isVideoMeta } from '@/lib/media'
 import type { PortfolioCategory } from '@/types'
 
 interface Props {
@@ -39,13 +39,19 @@ export default function CategoryGrid({ categories }: Props) {
 
   return (
     <div className="flex overflow-x-auto no-scrollbar" ref={listRef}>
-      {categories.map((cat, i) => (
+      {categories.map((cat, i) => {
+        const mediaUrl = getMediaUrl(cat.imageMeta)
+        const isVid = isVideoMeta(cat.imageMeta)
+        return (
         <Link
           key={cat.id}
           href={`/portfolio/${cat.id.toLowerCase()}`}
-          className="relative group bg-cover bg-no-repeat bg-center h-screen min-w-full sm:min-w-[50%] md:min-w-[33%] flex-shrink-0"
-          style={{ backgroundImage: `url(${getMediaUrl(cat.imageMeta)})` }}
+          className="relative group h-screen min-w-full sm:min-w-[50%] md:min-w-[33%] flex-shrink-0 overflow-hidden"
+          {...(!isVid && mediaUrl ? { style: { backgroundImage: `url(${mediaUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } } : {})}
         >
+          {isVid && mediaUrl && (
+            <video src={mediaUrl} autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover" />
+          )}
           {/* Dark overlay */}
           <div className="absolute inset-0 bg-black/50 group-hover:bg-black/30 transition-colors duration-500" />
 
@@ -60,7 +66,8 @@ export default function CategoryGrid({ categories }: Props) {
             0{i + 1}
           </div>
         </Link>
-      ))}
+        )
+      })}
     </div>
   )
 }

@@ -19,6 +19,7 @@ import { CSS } from '@dnd-kit/utilities'
 import MediaInput from './MediaInput'
 import ConfirmModal from './ConfirmModal'
 import type { PortfolioCategory, PortfolioItem, PortfolioImage, MediaMeta } from '@/types'
+import { isVideoMeta } from '@/lib/media'
 
 interface Props { initialCategories: PortfolioCategory[] }
 
@@ -56,6 +57,188 @@ function CategoryModal({ cat, onSave, onClose }: { cat: Partial<PortfolioCategor
 
 // ── Item Modal ──────────────────────────────────────────────────────────────────
 
+// ── Gallery Image Controls ──────────────────────────────────────────────────────
+
+const SIZE_PRESETS = [
+  { label: '1×1', colSpan: 1, rowSpan: 1 },
+  { label: 'Wide 2×1', colSpan: 2, rowSpan: 1 },
+  { label: 'Tall 1×2', colSpan: 1, rowSpan: 2 },
+  { label: 'Large 2×2', colSpan: 2, rowSpan: 2 },
+  { label: 'Hero 3×2', colSpan: 3, rowSpan: 2 },
+]
+
+const POSITION_DOTS = [
+  'top left', 'top center', 'top right',
+  'center left', 'center', 'center right',
+  'bottom left', 'bottom center', 'bottom right',
+]
+
+type GalleryImageState = { hidden: boolean; colSpan: number; rowSpan: number; objectFit: string; objectPosition: string }
+
+function GalleryImageCard({
+  img,
+  onDelete,
+  onStateChange,
+}: {
+  img: Partial<PortfolioImage>
+  onDelete: () => void
+  onStateChange?: (id: string, s: GalleryImageState) => void
+}) {
+  const [state, setState] = useState<GalleryImageState>({
+    hidden: img.hidden ?? false,
+    colSpan: img.colSpan ?? 1,
+    rowSpan: img.rowSpan ?? 1,
+    objectFit: img.objectFit ?? 'cover',
+    objectPosition: img.objectPosition ?? 'center',
+  })
+  const [savedFlash, setSavedFlash] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  const patch = async (patch: Partial<GalleryImageState>) => {
+    if (!img.id) return
+    const next = { ...state, ...patch }
+    setState(next)
+    onStateChange?.(img.id, next)
+    setSaving(true)
+    await fetch(`/api/content/portfolio/${img.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'image', data: next }),
+    })
+    setSaving(false)
+    setSavedFlash(true)
+    setTimeout(() => setSavedFlash(false), 1500)
+  }
+
+  const meta = img.imageMeta as MediaMeta | undefined
+  const isVideo = meta ? isVideoMeta(meta) : false
+
+  return (
+    <div className="bg-dark-3 rounded-lg overflow-hidden border border-white/5">
+      {/* Thumbnail */}
+      <div className="relative aspect-video bg-dark-2 group">
+        {meta && (
+          isVideo ? (
+            <video src={meta.url} muted playsInline
+              className="w-full h-full"
+              style={{ objectFit: state.objectFit as 'cover' | 'contain', objectPosition: state.objectPosition }}
+            />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={meta.url} alt=""
+              className="w-full h-full"
+              style={{ objectFit: state.objectFit as 'cover' | 'contain', objectPosition: state.objectPosition }}
+            />
+          )
+        )}
+
+        {/* Badges */}
+        <div className="absolute top-1.5 left-1.5 flex gap-1">
+          {state.hidden && (
+            <span className="text-[9px] font-oswald tracking-wider uppercase bg-black/80 text-white/40 px-1.5 py-0.5 rounded">Hidden</span>
+          )}
+          {savedFlash && (
+            <span className="text-[9px] font-oswald tracking-wider uppercase bg-green-600/90 text-white px-1.5 py-0.5 rounded">Saved ✓</span>
+          )}
+          {saving && (
+            <span className="text-[9px] font-oswald tracking-wider uppercase bg-dark-1/80 text-white/50 px-1.5 py-0.5 rounded">Saving…</span>
+          )}
+        </div>
+
+        {/* Delete */}
+        <button
+          onClick={onDelete}
+          className="absolute top-1 right-1 bg-black/70 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-all"
+        >
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Controls */}
+      <div className="p-2.5 space-y-2.5">
+        {/* Row 1: Hidden toggle + Fit toggle */}
+        <div className="flex items-center gap-2">
+          {/* Hidden */}
+          <button
+            onClick={() => patch({ hidden: !state.hidden })}
+            title={state.hidden ? 'Hidden — click to show' : 'Visible — click to hide'}
+            className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-oswald tracking-wider uppercase border transition-colors flex-1 justify-center ${
+              state.hidden
+                ? 'border-white/10 text-white/30 bg-transparent'
+                : 'border-yellow-2/50 text-yellow-2 bg-yellow-2/5'
+            }`}
+          >
+            {state.hidden ? (
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+              </svg>
+            ) : (
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            )}
+            {state.hidden ? 'Hidden' : 'Visible'}
+          </button>
+
+          {/* Fit */}
+          <div className="flex rounded overflow-hidden border border-white/10 flex-1">
+            {(['cover', 'contain'] as const).map((fit) => (
+              <button
+                key={fit}
+                onClick={() => patch({ objectFit: fit })}
+                className={`flex-1 py-1 text-[10px] font-oswald tracking-wider uppercase transition-colors ${
+                  state.objectFit === fit ? 'bg-yellow-2 text-dark-1' : 'text-white/40 hover:text-white'
+                }`}
+              >
+                {fit}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Row 2: Size presets */}
+        <div className="flex flex-wrap gap-1">
+          {SIZE_PRESETS.map((preset) => {
+            const active = state.colSpan === preset.colSpan && state.rowSpan === preset.rowSpan
+            return (
+              <button
+                key={preset.label}
+                onClick={() => patch({ colSpan: preset.colSpan, rowSpan: preset.rowSpan })}
+                className={`px-1.5 py-0.5 rounded text-[9px] font-oswald tracking-wider uppercase border transition-colors ${
+                  active ? 'bg-yellow-2 text-dark-1 border-yellow-2' : 'border-white/10 text-white/40 hover:border-white/30 hover:text-white/70'
+                }`}
+              >
+                {preset.label}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Row 3: Object position 3×3 grid */}
+        <div>
+          <div className="grid grid-cols-3 gap-0.5 w-[60px]">
+            {POSITION_DOTS.map((pos) => (
+              <button
+                key={pos}
+                onClick={() => patch({ objectPosition: pos })}
+                title={pos}
+                className={`w-4 h-4 rounded-sm flex items-center justify-center transition-colors ${
+                  state.objectPosition === pos ? 'bg-yellow-2' : 'bg-white/10 hover:bg-white/25'
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${state.objectPosition === pos ? 'bg-dark-1' : 'bg-white/50'}`} />
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ItemModal({ item, categoryId, onSave, onClose }: { item: Partial<PortfolioItem>; categoryId: string; onSave: (d: Partial<PortfolioItem>) => void; onClose: () => void }) {
   const [form, setForm] = useState({
     title: item.title ?? '',
@@ -68,6 +251,15 @@ function ItemModal({ item, categoryId, onSave, onClose }: { item: Partial<Portfo
   })
   const [tab, setTab] = useState<'details' | 'gallery'>('details')
   const [images, setImages] = useState<Partial<PortfolioImage>[]>(item.images ?? [])
+  const [liveStates, setLiveStates] = useState<Record<string, GalleryImageState>>(() =>
+    Object.fromEntries(
+      (item.images ?? []).filter((img) => img.id).map((img) => [
+        img.id!,
+        { hidden: img.hidden ?? false, colSpan: img.colSpan ?? 1, rowSpan: img.rowSpan ?? 1, objectFit: img.objectFit ?? 'cover', objectPosition: img.objectPosition ?? 'center' },
+      ])
+    )
+  )
+  const handleStateChange = (id: string, s: GalleryImageState) => setLiveStates((prev) => ({ ...prev, [id]: s }))
   const [newImage, setNewImage] = useState<MediaMeta | null>(null)
   const [deleteImageTarget, setDeleteImageTarget] = useState<string | null>(null)
   const [deletingImage, setDeletingImage] = useState(false)
@@ -84,6 +276,12 @@ function ItemModal({ item, categoryId, onSave, onClose }: { item: Partial<Portfo
     })
     const created = await res.json()
     setImages((imgs) => [...imgs, created])
+    if (created.id) {
+      setLiveStates((prev) => ({
+        ...prev,
+        [created.id]: { hidden: false, colSpan: 1, rowSpan: 1, objectFit: 'cover', objectPosition: 'center' },
+      }))
+    }
     setNewImage(null)
   }
 
@@ -92,6 +290,7 @@ function ItemModal({ item, categoryId, onSave, onClose }: { item: Partial<Portfo
     setDeletingImage(true)
     await fetch(`/api/content/portfolio/${deleteImageTarget}?type=image`, { method: 'DELETE' })
     setImages((imgs) => imgs.filter((x) => x.id !== deleteImageTarget))
+    setLiveStates((prev) => { const n = { ...prev }; delete n[deleteImageTarget]; return n })
     setDeletingImage(false)
     setDeleteImageTarget(null)
   }
@@ -99,7 +298,7 @@ function ItemModal({ item, categoryId, onSave, onClose }: { item: Partial<Portfo
   return (
     <div className="fixed inset-0 z-50 bg-black/70 overflow-y-auto">
       <div className="min-h-full flex items-start justify-center p-4">
-        <div className="bg-dark-2 rounded-lg w-full max-w-2xl my-8">
+        <div className="bg-dark-2 rounded-lg w-full max-w-4xl my-8">
           <div className="flex gap-1 p-1 bg-dark-3 rounded-t-lg">
             {(['details', 'gallery'] as const).map((t) => (
               <button key={t} type="button" onClick={() => setTab(t)}
@@ -132,36 +331,70 @@ function ItemModal({ item, categoryId, onSave, onClose }: { item: Partial<Portfo
               </>
             )}
             {tab === 'gallery' && (
-              <>
-                <h3 className="text-lg font-oswald tracking-wider uppercase text-yellow-2">Gallery Images</h3>
-                {!item.id && <p className="text-xs text-white/40">Save the item first before adding gallery images.</p>}
-                <div className="grid grid-cols-3 gap-3">
-                  {images.map((img, i) => (
-                    <div key={img.id ?? i} className="relative group rounded overflow-hidden bg-dark-3 aspect-square">
-                      {img.imageMeta && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={(img.imageMeta as MediaMeta).url} alt="" className="w-full h-full object-cover" />
-                      )}
-                      <button onClick={() => img.id && setDeleteImageTarget(img.id)} className="absolute top-1 right-1 bg-black/70 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-all">
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                      </button>
+              <div className="flex gap-5 items-start">
+                {/* Left col: sticky layout preview */}
+                {images.length > 0 && (
+                  <div className="w-44 flex-shrink-0 sticky top-0">
+                    <p className="text-[10px] font-oswald tracking-widest uppercase text-white/30 mb-2">Layout Preview</p>
+                    <div className="bg-dark-3 rounded p-2">
+                      <div
+                        className="grid gap-0.5"
+                        style={{ gridTemplateColumns: 'repeat(3, 1fr)', gridAutoRows: '22px' }}
+                      >
+                        {images.map((img, i) => {
+                          const live = img.id ? (liveStates[img.id] ?? img) : img
+                          if (live.hidden) return null
+                          return (
+                            <div
+                              key={img.id ?? i}
+                              className="rounded-sm border bg-yellow-2/25 border-yellow-2/40"
+                              style={{
+                                gridColumn: `span ${Math.min(live.colSpan ?? 1, 3)}`,
+                                gridRow: `span ${Math.min(live.rowSpan ?? 1, 2)}`,
+                              }}
+                            />
+                          )
+                        })}
+                      </div>
                     </div>
-                  ))}
-                </div>
-                {item.id && (
-                  <div className="space-y-2">
-                    <MediaInput value={newImage} onChange={setNewImage} label="Add Image" />
-                    {newImage && (
-                      <button type="button" onClick={addImage} className="w-full py-2 bg-yellow-2 text-dark-1 text-xs font-oswald tracking-wider uppercase rounded hover:bg-yellow-2/90 transition-colors">
-                        Add to Gallery
-                      </button>
-                    )}
                   </div>
                 )}
-              </>
+
+                {/* Right col: title + cards + add image */}
+                <div className="flex-1 min-w-0 space-y-3">
+                  <h3 className="text-lg font-oswald tracking-wider uppercase text-yellow-2">Gallery</h3>
+                  {!item.id && <p className="text-xs text-white/40">Save the item first before adding gallery images.</p>}
+
+                  <div className="grid grid-cols-2 gap-3">
+                    {images.map((img, i) => (
+                      <GalleryImageCard
+                        key={img.id ?? i}
+                        img={img}
+                        onDelete={() => img.id && setDeleteImageTarget(img.id)}
+                        onStateChange={handleStateChange}
+                      />
+                    ))}
+                  </div>
+
+                  {item.id && (
+                    <div className="space-y-2">
+                      <MediaInput value={newImage} onChange={setNewImage} label="Add Image" />
+                      {newImage && (
+                        <button type="button" onClick={addImage} className="w-full py-2 bg-yellow-2 text-dark-1 text-xs font-oswald tracking-wider uppercase rounded hover:bg-yellow-2/90 transition-colors">
+                          Add to Gallery
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
             <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => onSave({ ...form, categoryId, images: images as PortfolioImage[] })} className="flex-1 py-2 bg-yellow-2 text-dark-1 text-xs font-oswald tracking-wider uppercase rounded hover:bg-yellow-2/90 transition-colors">Save</button>
+              <button type="button" onClick={() => onSave({
+                ...form,
+                categoryId,
+                images: images.map((img) => ({ ...img, ...(img.id ? liveStates[img.id] ?? {} : {}) })) as PortfolioImage[],
+              })} className="flex-1 py-2 bg-yellow-2 text-dark-1 text-xs font-oswald tracking-wider uppercase rounded hover:bg-yellow-2/90 transition-colors">Save</button>
               <button type="button" onClick={onClose} className="flex-1 py-2 border border-white/20 text-white/60 text-xs font-oswald tracking-wider uppercase rounded hover:border-white/40 transition-colors">Close</button>
             </div>
           </div>
@@ -196,10 +429,15 @@ function SortableCategoryCard({ cat, onOpen, onEdit, onDelete }: {
 
   return (
     <div ref={setNodeRef} style={style} className="bg-dark-3 rounded-lg overflow-hidden flex flex-col group">
-      <button onClick={onOpen} className="aspect-video relative bg-dark-2 overflow-hidden flex-shrink-0 w-full text-left">
+      {/* div instead of button to avoid button-in-button hydration error */}
+      <div onClick={onOpen} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onOpen()} className="aspect-video relative bg-dark-2 overflow-hidden flex-shrink-0 w-full cursor-pointer">
         {imgUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={imgUrl} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          isVideoMeta(cat.imageMeta) ? (
+            <video src={imgUrl} muted playsInline className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={imgUrl} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          )
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <svg className="w-10 h-10 text-white/10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>
@@ -217,7 +455,7 @@ function SortableCategoryCard({ cat, onOpen, onEdit, onDelete }: {
         >
           <GripIcon />
         </button>
-      </button>
+      </div>
       <div className="p-4 flex-1 flex flex-col gap-3">
         <div>
           <p className="font-oswald text-white tracking-wide leading-tight">{cat.name}</p>
@@ -255,8 +493,12 @@ function SortablePortfolioItemCard({ item, onEdit, onDelete }: {
     <div ref={setNodeRef} style={style} className="bg-dark-3 rounded-lg overflow-hidden flex flex-col group">
       <div className="aspect-video relative bg-dark-2 overflow-hidden flex-shrink-0">
         {imgUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={imgUrl} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          isVideoMeta(item.coverMeta) ? (
+            <video src={imgUrl} muted playsInline className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={imgUrl} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          )
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <svg className="w-10 h-10 text-white/10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>
@@ -409,7 +651,7 @@ export default function PortfolioEditor({ initialCategories }: Props) {
         body: JSON.stringify({ type: 'item', data }),
       })
       const updated = await res.json()
-      setCats((c) => c.map((cat) => cat.id === catId ? { ...cat, items: (cat.items ?? []).map((x) => x.id === editingItem.item.id ? { ...x, ...updated } : x) } : cat))
+      setCats((c) => c.map((cat) => cat.id === catId ? { ...cat, items: (cat.items ?? []).map((x) => x.id === editingItem.item.id ? { ...x, ...updated, images: (data.images as PortfolioImage[]) ?? x.images } : x) } : cat))
     } else {
       const res = await fetch('/api/content/portfolio', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },

@@ -37,6 +37,24 @@ export function extractYouTubeId(input: string): string | null {
   return null
 }
 
+/**
+ * Returns true if the MediaMeta represents a video.
+ * Uses the stored mimeType when available, falls back to URL extension
+ * for direct URL entries where an extension may be present.
+ */
+export function isVideoMeta(meta: MediaMeta | null | undefined): boolean {
+  if (!meta) return false
+  if (meta.mimeType) return meta.mimeType.startsWith('video/')
+  // Fallback: direct URL type where the URL may have an extension
+  return /\.mp4(\?.*)?$/i.test(meta.url)
+}
+
+/** @deprecated Prefer isVideoMeta(meta) — UploadThing UFS URLs have no extension. */
+export function isVideoUrl(url: string | null | undefined): boolean {
+  if (!url) return false
+  return /\.mp4(\?.*)?$/i.test(url)
+}
+
 export function gdriveUrlToEmbed(url: string): string {
   const match = url.match(/\/d\/([^/]+)/)
   const id = match?.[1]

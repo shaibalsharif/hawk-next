@@ -33,12 +33,19 @@ export default async function PortfolioItemPage({ params }: Props) {
     displayOrder: raw.displayOrder,
   }
 
-  const images: PortfolioImage[] = raw.images.map((img: typeof raw.images[number]) => ({
-    id: img.id,
-    itemId: img.itemId,
-    imageMeta: img.imageMeta as unknown as MediaMeta,
-    displayOrder: img.displayOrder,
-  }))
+  const images: PortfolioImage[] = raw.images
+    .filter((img: typeof raw.images[number]) => !img.hidden)
+    .map((img: typeof raw.images[number]) => ({
+      id: img.id,
+      itemId: img.itemId,
+      imageMeta: img.imageMeta as unknown as MediaMeta,
+      displayOrder: img.displayOrder,
+      hidden: img.hidden,
+      colSpan: img.colSpan,
+      rowSpan: img.rowSpan,
+      objectFit: img.objectFit,
+      objectPosition: img.objectPosition,
+    }))
 
   return (
     <div>
