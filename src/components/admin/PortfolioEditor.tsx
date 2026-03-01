@@ -79,10 +79,14 @@ function GalleryImageCard({
   img,
   onDelete,
   onStateChange,
+  isHovered,
+  onHoverChange,
 }: {
   img: Partial<PortfolioImage>
   onDelete: () => void
   onStateChange?: (id: string, s: GalleryImageState) => void
+  isHovered?: boolean
+  onHoverChange?: (hovered: boolean) => void
 }) {
   const [state, setState] = useState<GalleryImageState>({
     hidden: img.hidden ?? false,
@@ -114,7 +118,11 @@ function GalleryImageCard({
   const isVideo = meta ? isVideoMeta(meta) : false
 
   return (
-    <div className="bg-dark-3 rounded-lg overflow-hidden border border-white/5">
+    <div
+      className={`bg-dark-3 rounded-lg overflow-hidden border transition-colors duration-200 ${isHovered ? 'border-yellow-2/60' : 'border-white/5'}`}
+      onMouseEnter={() => onHoverChange?.(true)}
+      onMouseLeave={() => onHoverChange?.(false)}
+    >
       {/* Thumbnail */}
       <div className="relative aspect-video bg-dark-2 group">
         {meta && (
@@ -131,6 +139,9 @@ function GalleryImageCard({
             />
           )
         )}
+
+        {/* Hover highlight overlay (triggered from preview tile) */}
+        <div className={`absolute inset-0 pointer-events-none transition-opacity duration-200 bg-yellow-2/10 ${isHovered ? 'opacity-100' : 'opacity-0'}`} />
 
         {/* Badges */}
         <div className="absolute top-1.5 left-1.5 flex gap-1">
@@ -260,6 +271,7 @@ function ItemModal({ item, categoryId, onSave, onClose }: { item: Partial<Portfo
     )
   )
   const handleStateChange = (id: string, s: GalleryImageState) => setLiveStates((prev) => ({ ...prev, [id]: s }))
+  const [hoveredImageId, setHoveredImageId] = useState<string | null>(null)
   const [newImage, setNewImage] = useState<MediaMeta | null>(null)
   const [deleteImageTarget, setDeleteImageTarget] = useState<string | null>(null)
   const [deletingImage, setDeletingImage] = useState(false)
@@ -344,14 +356,17 @@ function ItemModal({ item, categoryId, onSave, onClose }: { item: Partial<Portfo
                         {images.map((img, i) => {
                           const live = img.id ? (liveStates[img.id] ?? img) : img
                           if (live.hidden) return null
+                          const tileActive = hoveredImageId === img.id
                           return (
                             <div
                               key={img.id ?? i}
-                              className="rounded-sm border bg-yellow-2/25 border-yellow-2/40"
+                              className={`rounded-sm border transition-colors duration-150 cursor-default ${tileActive ? 'bg-yellow-2/60 border-yellow-2' : 'bg-yellow-2/25 border-yellow-2/40'}`}
                               style={{
                                 gridColumn: `span ${Math.min(live.colSpan ?? 1, 3)}`,
                                 gridRow: `span ${Math.min(live.rowSpan ?? 1, 2)}`,
                               }}
+                              onMouseEnter={() => img.id && setHoveredImageId(img.id)}
+                              onMouseLeave={() => setHoveredImageId(null)}
                             />
                           )
                         })}
@@ -372,6 +387,8 @@ function ItemModal({ item, categoryId, onSave, onClose }: { item: Partial<Portfo
                         img={img}
                         onDelete={() => img.id && setDeleteImageTarget(img.id)}
                         onStateChange={handleStateChange}
+                        isHovered={hoveredImageId === img.id}
+                        onHoverChange={(h) => setHoveredImageId(h ? (img.id ?? null) : null)}
                       />
                     ))}
                   </div>
