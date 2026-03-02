@@ -94,6 +94,7 @@ export interface PortfolioImage {
   rowSpan: number
   objectFit: string
   objectPosition: string
+  thumbMeta?: MediaMeta | null
 }
 
 export interface PortfolioItem {

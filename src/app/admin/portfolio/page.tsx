@@ -28,6 +28,7 @@ export default async function AdminPortfolioPage() {
       images: item.images.map((img: RawImg): PortfolioImage => ({
         ...img,
         imageMeta: img.imageMeta as unknown as MediaMeta,
+        thumbMeta: img.thumbMeta as unknown as MediaMeta | null ?? null,
       })),
     })),
   }))

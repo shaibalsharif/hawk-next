@@ -294,30 +294,149 @@ src/
 │   ├── api/
 │   │   ├── auth/           # verify, session, forgot endpoints
 │   │   ├── content/        # Content CRUD endpoints
-│   │   ├── media/          # File manager & delete endpoints
+│   │   ├── media/          # File manager, delete, cleanup endpoints
 │   │   └── users/          # Admin user management endpoints
 │   ├── login/              # Login page (Google + email/password)
 │   ├── not-found.tsx       # Custom 404 page
 │   ├── error.tsx           # Custom 500 error page
 │   └── reset-password/     # Password reset page (oobCode flow)
 ├── components/
-│   ├── admin/              # Admin UI components
-│   └── shared/             # Cursor, Header, Footer, NavOverlay, etc.
+│   ├── admin/
+│   │   ├── portfolio/      # Portfolio sub-components (modular)
+│   │   │   ├── shared.ts               # Shared constants & types
+│   │   │   ├── CategoryModal.tsx       # Category create/edit modal
+│   │   │   ├── ItemModal.tsx           # Item create/edit modal (details + gallery tabs)
+│   │   │   ├── GalleryImageCard.tsx    # Per-image card: size, fit, position, hidden controls
+│   │   │   ├── FramePicker.tsx         # Video frame capture → custom thumbnail
+│   │   │   ├── SortableCategoryCard.tsx
+│   │   │   ├── SortablePortfolioItemCard.tsx
+│   │   │   └── SortablePreviewTile.tsx # Draggable tile in layout preview grid
+│   │   ├── PortfolioEditor.tsx # Main orchestrator (~280 lines)
+│   │   ├── MediaInput.tsx      # Unified media picker (upload / URL / YouTube / GDrive)
+│   │   ├── FileManagerClient.tsx
+│   │   └── ConfirmModal.tsx
+│   └── portfolio/          # Public-facing portfolio components
+├── hooks/
+│   └── useFileUpload.ts    # Provider-agnostic upload hook (wraps storage client)
 ├── lib/
+│   ├── storage/            # Storage provider abstraction layer
+│   │   ├── types.ts                    # StorageProvider interface
+│   │   ├── providers/
+│   │   │   └── uploadthing.ts          # UploadThing implementation (only file using UTApi)
+│   │   └── index.ts                    # Re-exports active provider as `storage`
 │   ├── auth.ts             # getSessionUser, requireAdmin, requireSuperAdmin
 │   ├── firebase-admin.ts   # Firebase Admin SDK (lazy init)
 │   ├── firebase-client.ts  # Firebase client SDK
 │   ├── firebase-email.ts   # Firebase REST API — forgot-password emails
 │   ├── mailer.ts           # Nodemailer (Gmail SMTP) — invite & reset emails
+│   ├── media.ts            # MediaMeta helpers: isVideoMeta, getThumbnailUrl, etc.
 │   ├── prisma.ts           # Prisma client singleton
 │   └── reset-link.ts       # Builds custom /reset-password URL from Firebase oobCode
 ├── types/
-│   └── index.ts            # Shared TypeScript types
+│   └── index.ts            # Shared TypeScript types (MediaMeta, PortfolioImage, etc.)
 prisma/
 └── schema.prisma           # Database schema
 scripts/
 └── add-superadmin.mjs      # CLI: add/remove superadmins
 ```
+
+---
+
+## Media Storage Architecture
+
+All file storage is handled through a provider abstraction layer so the rest of the codebase is decoupled from any specific service.
+
+### How it works
+
+**Server-side** — `src/lib/storage/index.ts` exports a single `storage` object that every API route uses for listing, fetching URLs, and deleting files. The only file that imports from `uploadthing/server` is `src/lib/storage/providers/uploadthing.ts`.
+
+**Client-side** — `src/hooks/useFileUpload.ts` is the only file that calls `useUploadThing`. All components call `useFileUpload()` instead, with no direct dependency on UploadThing's client SDK.
+
+### MediaMeta type
+
+Every media field in the database is stored as a JSON object:
+
+```ts
+type MediaMeta =
+  | { type: 'uploadthing'; url: string; key: string; mimeType?: string }
+  | { type: 'youtube';     url: string }   // YouTube video ID
+  | { type: 'gdrive';      url: string }   // Google Drive file ID
+  | { type: 'url';         url: string }   // Plain external URL
+```
+
+### Video thumbnails (thumbMeta)
+
+Gallery images that are videos can have a separate custom thumbnail captured via the frame picker. This is stored in `PortfolioImage.thumbMeta` (same `MediaMeta` shape). The file manager recognises both `imageMeta` and `thumbMeta` when determining whether a file is in use.
+
+---
+
+## Migrating to a Different Storage Provider
+
+When you want to move away from UploadThing (e.g. to S3, Cloudflare R2, or your own server), the changes are intentionally concentrated in as few files as possible.
+
+### Step 1 — Server-side provider
+
+Create `src/lib/storage/providers/my-provider.ts` implementing the `StorageProvider` interface:
+
+```ts
+import type { StorageProvider } from '../types'
+
+export const myProvider: StorageProvider = {
+  async listFiles() { /* ... */ },
+  async getFileUrls(keys) { /* ... */ },
+  async deleteFiles(keys) { /* ... */ },
+}
+```
+
+Then change **one line** in `src/lib/storage/index.ts`:
+
+```ts
+// Before:
+export { uploadthingProvider as storage } from './providers/uploadthing'
+// After:
+export { myProvider as storage } from './providers/my-provider'
+```
+
+### Step 2 — Client-side upload hook
+
+Update `src/hooks/useFileUpload.ts` to call your new upload endpoint or SDK. No component changes are needed — all components call `useFileUpload()`.
+
+### Step 3 — Upload route handler
+
+UploadThing uses a dedicated route at `src/app/api/uploadthing/`. Replace this with whatever your new provider requires (a signed URL endpoint, a direct-upload handler, etc.).
+
+### Step 4 — Database migration
+
+Existing DB records have `"type": "uploadthing"` in their JSON columns. Run a one-time script to rewrite URLs and update the `type` field:
+
+```ts
+// Pseudocode — adapt to your new provider
+const images = await prisma.portfolioImage.findMany()
+for (const img of images) {
+  const meta = img.imageMeta as MediaMeta
+  if (meta.type === 'uploadthing') {
+    const newUrl = await reuploadToNewProvider(meta.url)
+    await prisma.portfolioImage.update({
+      where: { id: img.id },
+      data: { imageMeta: { type: 'my-provider', url: newUrl, key: '...' } },
+    })
+  }
+}
+```
+
+Apply the same script to all other `Json` columns that store `MediaMeta`: `PortfolioItem.coverMeta`, `PortfolioCategory.imageMeta`, `PortfolioImage.thumbMeta`, `TeamMember.imageMeta`, etc.
+
+### Summary of files to change
+
+| File | What to do |
+|---|---|
+| `src/lib/storage/providers/uploadthing.ts` | Keep for reference or delete after migration |
+| `src/lib/storage/providers/my-provider.ts` | Create — implement `StorageProvider` |
+| `src/lib/storage/index.ts` | Change one re-export line |
+| `src/hooks/useFileUpload.ts` | Update to use new client SDK / endpoint |
+| `src/app/api/uploadthing/` | Replace with new provider's route handler |
+| `src/types/index.ts` | Add new type to `MediaMeta` union |
+| Database | One-time migration script for all `Json` media columns |
 
 ---
 

@@ -1,31 +1,38 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/lib/auth'
-import { UTApi } from 'uploadthing/server'
+import { storage } from '@/lib/storage'
 
 export const runtime = 'nodejs'
-const utapi = new UTApi()
 
-export async function GET() {
+/**
+ * POST /api/media/cleanup
+ *
+ * Deletes any UploadThing files that are not tracked in the MediaFile table.
+ * Uses POST (not GET) because this is a destructive operation.
+ */
+export async function POST() {
   await requireAdmin()
 
-  const { files } = await utapi.listFiles()
-  const tracked = await prisma.mediaFile.findMany({
-    where: { provider: 'UPLOADTHING' },
-    select: { fileKey: true },
-  })
+  const [storageFiles, tracked] = await Promise.all([
+    storage.listFiles(),
+    prisma.mediaFile.findMany({
+      where: { provider: 'UPLOADTHING' },
+      select: { fileKey: true },
+    }),
+  ])
 
-  const trackedKeys = new Set(tracked.map((f: { fileKey: string }) => f.fileKey))
-  const orphans = files.filter((f: { key: string }) => !trackedKeys.has(f.key))
+  const trackedKeys = new Set(tracked.map((f) => f.fileKey))
+  const orphans = storageFiles.filter((f) => !trackedKeys.has(f.key))
 
   if (orphans.length > 0) {
-    await utapi.deleteFiles(orphans.map((f: { key: string }) => f.key))
+    await storage.deleteFiles(orphans.map((f) => f.key))
   }
 
   return NextResponse.json({
-    total: files.length,
+    total: storageFiles.length,
     tracked: tracked.length,
     orphansDeleted: orphans.length,
-    orphanKeys: orphans.map((f: { key: string }) => f.key),
+    orphanKeys: orphans.map((f) => f.key),
   })
 }

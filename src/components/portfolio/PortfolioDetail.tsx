@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { getMediaUrl, isVideoMeta } from '@/lib/media'
+import { getMediaUrl, isVideoMeta, isEmbedMedia, getThumbnailUrl, getEmbedUrl } from '@/lib/media'
+import VideoPlayer from './VideoPlayer'
 import type { PortfolioItem, PortfolioImage } from '@/types'
 
 const XEN_EASE: [number, number, number, number] = [0.76, 0, 0.24, 1]
@@ -29,8 +30,9 @@ function Lightbox({
   onNext: () => void
 }) {
   const img = images[index]
+  const isEmbed = isEmbedMedia(img.imageMeta)
+  const isDirectVideo = !isEmbed && isVideoMeta(img.imageMeta)
   const url = getMediaUrl(img.imageMeta)
-  const isVideo = isVideoMeta(img.imageMeta)
   const total = images.length
 
   useEffect(() => {
@@ -105,13 +107,20 @@ function Lightbox({
           transition={{ duration: 0.2 }}
           onClick={(e) => e.stopPropagation()}
         >
-          {isVideo ? (
-            <video
+          {isEmbed ? (
+            <iframe
+              src={getEmbedUrl(img.imageMeta)}
+              className="max-w-full rounded"
+              style={{ width: '80vw', height: '60vh', border: 0 }}
+              allow="autoplay; fullscreen"
+              allowFullScreen
+              title={`Gallery ${index + 1}`}
+            />
+          ) : isDirectVideo ? (
+            <VideoPlayer
               src={url}
-              controls
               autoPlay
-              playsInline
-              className="max-w-full max-h-[85vh] rounded"
+              className="max-w-[90vw] rounded overflow-hidden"
             />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
@@ -150,16 +159,25 @@ export default function PortfolioDetail({ item, images }: Props) {
 
   return (
     <div>
-      {/* Cover */}
-      <div className="relative h-screen flex items-end overflow-hidden">
-        {coverUrl && (
-          isVideoMeta(item.coverMeta) ? (
+      {/* Cover + info overlay */}
+      <div className="relative min-h-screen flex items-end overflow-hidden">
+        {item.coverMeta && (
+          isEmbedMedia(item.coverMeta) ? (
+            <iframe
+              src={item.coverMeta.type === 'youtube' ? coverUrl : getEmbedUrl(item.coverMeta)}
+              className="absolute inset-0 w-full h-full"
+              style={{ border: 0, pointerEvents: 'none' }}
+              allow="autoplay; fullscreen"
+              allowFullScreen
+              title="Cover video"
+            />
+          ) : isVideoMeta(item.coverMeta) ? (
             <video
               src={coverUrl}
               autoPlay muted loop playsInline
               className="absolute inset-0 w-full h-full object-cover"
             />
-          ) : (
+          ) : coverUrl ? (
             <motion.img
               src={coverUrl}
               alt={item.title}
@@ -168,11 +186,13 @@ export default function PortfolioDetail({ item, images }: Props) {
               animate={{ scale: 1 }}
               transition={{ duration: 1.4, ease: XEN_EASE }}
             />
-          )
+          ) : null
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-dark-1 via-dark-1/40 to-transparent" />
+        {/* Stronger gradient — enough opacity to keep text readable over any cover */}
+        <div className="absolute inset-0 bg-gradient-to-t from-dark-1 via-dark-1/80 to-dark-1/10" />
 
-        <div className="relative z-10 px-8 md:px-[10%] pb-16 w-full">
+        <div className="relative z-10 px-8 md:px-[10%] pb-16 pt-32 w-full">
+          {/* Title */}
           <div style={{ overflow: 'hidden' }}>
             <motion.h1
               className="text-[clamp(2rem,6vw,5rem)] font-[700] uppercase leading-tight"
@@ -183,6 +203,8 @@ export default function PortfolioDetail({ item, images }: Props) {
               {item.title}
             </motion.h1>
           </div>
+
+          {/* Client / Year / Role */}
           <motion.div
             className="flex flex-wrap gap-8 mt-4 text-xs text-white/60 uppercase tracking-widest"
             initial={{ opacity: 0, y: 16 }}
@@ -193,38 +215,35 @@ export default function PortfolioDetail({ item, images }: Props) {
             <span>Year: <span className="text-yellow-2">{item.year}</span></span>
             <span>Role: <span className="text-yellow-2">{item.role}</span></span>
           </motion.div>
-        </div>
-      </div>
 
-      {/* Description + takeaways */}
-      <div className="bg-dark-1 py-24 px-8 md:px-[10%]">
-        <div className="flex flex-col md:flex-row gap-16 items-start">
-          {item.takeaways.length > 0 && (
-            <ul className="space-y-3 md:w-1/3 flex-shrink-0">
-              {item.takeaways.map((point, i) => (
-                <motion.li
-                  key={i}
-                  className="text-yellow-2 text-xs uppercase tracking-widest flex items-start gap-2"
-                  initial={{ opacity: 0, x: -10 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.06, duration: 0.5 }}
-                >
-                  <span className="mt-1">—</span>
-                  <span className="text-white">{point}</span>
-                </motion.li>
-              ))}
-            </ul>
+          {/* Takeaways + Description */}
+          {(item.takeaways.length > 0 || item.description) && (
+            <motion.div
+              className="flex flex-col md:flex-row gap-8 md:gap-16 mt-10 pt-8 border-t border-white/10 items-start"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 1.1 }}
+            >
+              {item.takeaways.length > 0 && (
+                <ul className="space-y-2.5 md:w-1/3 flex-shrink-0">
+                  {item.takeaways.map((point, i) => (
+                    <li
+                      key={i}
+                      className="text-xs uppercase tracking-widest flex items-start gap-2"
+                    >
+                      <span className="mt-0.5 text-yellow-2">—</span>
+                      <span className="text-white/80">{point}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {item.description && (
+                <p className="text-white/60 text-sm leading-relaxed text-justify">
+                  {item.description}
+                </p>
+              )}
+            </motion.div>
           )}
-          <motion.p
-            className="text-white/70 text-sm leading-relaxed text-justify"
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.7 }}
-          >
-            {item.description}
-          </motion.p>
         </div>
       </div>
 
@@ -240,8 +259,14 @@ export default function PortfolioDetail({ item, images }: Props) {
             }}
           >
             {shownImages.map((img, i) => {
-              const url = getMediaUrl(img.imageMeta)
-              const isVideo = isVideoMeta(img.imageMeta)
+              const isEmbed = isEmbedMedia(img.imageMeta)
+              const isDirectVideo = !isEmbed && isVideoMeta(img.imageMeta)
+              // Custom thumb overrides auto-detection; falls back to YouTube thumb or media URL
+              const displaySrc = img.thumbMeta
+                ? getMediaUrl(img.thumbMeta)
+                : isEmbed
+                ? getThumbnailUrl(img.imageMeta)
+                : getMediaUrl(img.imageMeta)
               const priority = i < 3
 
               return (
@@ -250,7 +275,7 @@ export default function PortfolioDetail({ item, images }: Props) {
                   className="relative overflow-hidden cursor-pointer rounded-sm group"
                   style={{
                     gridColumn: `span ${Math.min(img.colSpan, 3)}`,
-                    gridRow: `span ${Math.min(img.rowSpan, 2)}`,
+                    gridRow: `span ${Math.min(img.rowSpan, 3)}`,
                   }}
                   initial={{ opacity: 0 }}
                   whileInView={{ opacity: 1 }}
@@ -258,9 +283,9 @@ export default function PortfolioDetail({ item, images }: Props) {
                   transition={{ duration: 0.5, delay: Math.min(i % 3, 2) * 0.06 }}
                   onClick={() => openLightbox(i)}
                 >
-                  {isVideo ? (
+                  {isDirectVideo && !img.thumbMeta ? (
                     <video
-                      src={url}
+                      src={displaySrc}
                       muted
                       playsInline
                       preload="metadata"
@@ -273,7 +298,7 @@ export default function PortfolioDetail({ item, images }: Props) {
                   ) : (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={url}
+                      src={displaySrc}
                       alt={`Gallery ${i + 1}`}
                       loading={priority ? undefined : 'lazy'}
                       {...(priority ? { fetchPriority: 'high' } as Record<string, string> : {})}

@@ -60,3 +60,51 @@ export function gdriveUrlToEmbed(url: string): string {
   const id = match?.[1]
   return id ? `https://drive.google.com/uc?export=view&id=${id}` : url
 }
+
+/**
+ * Returns true for media that must be rendered via <iframe> (YouTube, GDrive video).
+ * These cannot be used as <video src> or <img src>.
+ */
+export function isEmbedMedia(meta: MediaMeta | null | undefined): boolean {
+  if (!meta) return false
+  if (meta.type === 'youtube') return true
+  if (meta.type === 'gdrive' && meta.mimeType?.startsWith('video/')) return true
+  return false
+}
+
+/**
+ * Returns a usable thumbnail image URL for grid/card previews.
+ * For YouTube: YouTube thumbnail API. For GDrive: Drive thumbnail API. Others: getMediaUrl.
+ */
+export function getThumbnailUrl(meta: MediaMeta | null | undefined): string {
+  if (!meta) return ''
+  if (meta.type === 'youtube') {
+    const id = extractYouTubeId(meta.url)
+    return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : ''
+  }
+  if (meta.type === 'gdrive') {
+    const match = meta.url.match(/\/d\/([^/]+)/)
+    const id = match?.[1]
+    return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w400` : getMediaUrl(meta)
+  }
+  return getMediaUrl(meta)
+}
+
+/**
+ * Returns the iframe embed URL for embed media (YouTube / GDrive video).
+ * YouTube returns a clean embed URL (with controls visible).
+ * GDrive returns the /preview URL.
+ */
+export function getEmbedUrl(meta: MediaMeta | null | undefined): string {
+  if (!meta) return ''
+  if (meta.type === 'youtube') {
+    const id = extractYouTubeId(meta.url)
+    return id ? `https://www.youtube.com/embed/${id}` : meta.url
+  }
+  if (meta.type === 'gdrive') {
+    const match = meta.url.match(/\/d\/([^/]+)/)
+    const id = match?.[1]
+    return id ? `https://drive.google.com/file/d/${id}/preview` : meta.url
+  }
+  return getMediaUrl(meta)
+}

@@ -25,18 +25,30 @@ export async function POST(req: NextRequest) {
   if (type === 'category') {
     const count = await prisma.portfolioCategory.count()
     const cat = await prisma.portfolioCategory.create({
-      data: { ...data, displayOrder: data.displayOrder ?? count },
+      data: {
+        name: String(data.name ?? ''),
+        details: data.details ? String(data.details) : '',
+        imageMeta: data.imageMeta ?? undefined,
+        displayOrder: count,
+      },
     })
     return NextResponse.json(cat, { status: 201 })
   }
 
   if (type === 'item') {
-    const count = await prisma.portfolioItem.count({ where: { categoryId: data.categoryId } })
+    const categoryId = String(data.categoryId ?? '')
+    const count = await prisma.portfolioItem.count({ where: { categoryId } })
     const item = await prisma.portfolioItem.create({
       data: {
-        ...data,
-        displayOrder: data.displayOrder ?? count,
-        takeaways: data.takeaways ?? [],
+        categoryId,
+        title: String(data.title ?? ''),
+        client: data.client ? String(data.client) : '',
+        year: data.year ? Number(data.year) : new Date().getFullYear(),
+        role: data.role ? String(data.role) : '',
+        description: data.description ? String(data.description) : '',
+        takeaways: Array.isArray(data.takeaways) ? data.takeaways.map(String) : [],
+        coverMeta: data.coverMeta ?? undefined,
+        displayOrder: count,
       },
       include: { images: true },
     })
@@ -44,9 +56,14 @@ export async function POST(req: NextRequest) {
   }
 
   if (type === 'image') {
-    const count = await prisma.portfolioImage.count({ where: { itemId: data.itemId } })
+    const itemId = String(data.itemId ?? '')
+    const count = await prisma.portfolioImage.count({ where: { itemId } })
     const img = await prisma.portfolioImage.create({
-      data: { ...data, displayOrder: data.displayOrder ?? count },
+      data: {
+        itemId,
+        imageMeta: data.imageMeta,
+        displayOrder: count,
+      },
     })
     return NextResponse.json(img, { status: 201 })
   }
@@ -69,6 +86,13 @@ export async function PATCH(req: NextRequest) {
   if (type === 'item') {
     await Promise.all(order.map(({ id, displayOrder }) =>
       prisma.portfolioItem.update({ where: { id }, data: { displayOrder } })
+    ))
+    return NextResponse.json({ ok: true })
+  }
+
+  if (type === 'image') {
+    await Promise.all(order.map(({ id, displayOrder }) =>
+      prisma.portfolioImage.update({ where: { id }, data: { displayOrder } })
     ))
     return NextResponse.json({ ok: true })
   }

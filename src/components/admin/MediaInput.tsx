@@ -1,8 +1,8 @@
 'use client'
 import { useState } from 'react'
 import type { MediaMeta } from '@/types'
-import { getMediaUrl, extractYouTubeId, isVideoMeta } from '@/lib/media'
-import { useUploadThing } from '@/lib/uploadthing-react'
+import { getMediaUrl, extractYouTubeId, isVideoMeta, getEmbedUrl } from '@/lib/media'
+import { useFileUpload } from '@/hooks/useFileUpload'
 
 type Tab = 'upload' | 'gdrive' | 'youtube' | 'url'
 
@@ -17,31 +17,19 @@ interface Props {
 export default function MediaInput({ value, onChange, accept = 'image', label = 'Media', previewFit = 'cover' }: Props) {
   const [tab, setTab] = useState<Tab>('upload')
   const [urlInput, setUrlInput] = useState('')
-  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
 
-  const endpoint = (accept === 'video' ? 'videoUploader' : 'imageUploader') as 'imageUploader' | 'videoUploader'
-
-  const { startUpload } = useUploadThing(endpoint, {
-    onClientUploadComplete: (res: { ufsUrl: string; key: string; name?: string; type?: string }[]) => {
-      if (res?.[0]) {
-        const f = res[0]
-        const mimeType = f.type ?? (f.name?.toLowerCase().endsWith('.mp4') ? 'video/mp4' : undefined)
-        onChange({ type: 'uploadthing', url: f.ufsUrl, key: f.key, ...(mimeType ? { mimeType } : {}) })
-      }
-      setUploading(false)
-    },
-    onUploadError: (err: { message: string }) => {
-      setError(err.message)
-      setUploading(false)
-    },
-  })
+  const uploadAccept = accept === 'video' ? 'video' : 'image'
+  const { upload, uploading } = useFileUpload(
+    uploadAccept,
+    (meta) => { onChange(meta) },
+    (msg) => { setError(msg) },
+  )
 
   const handleFile = async (files: FileList | null) => {
     if (!files?.length) return
-    setUploading(true)
     setError('')
-    await startUpload(Array.from(files))
+    await upload(Array.from(files))
   }
 
   const applyUrl = () => {
@@ -155,12 +143,23 @@ export default function MediaInput({ value, onChange, accept = 'image', label = 
       {value && (
         <div className="relative rounded overflow-hidden bg-dark-3">
           {value.type === 'youtube' ? (
+            // YouTube: embed iframe with the stored video ID
             <iframe
               src={`https://www.youtube.com/embed/${value.url}?mute=1`}
               className="w-full aspect-video"
-              allow="accelerometer; autoplay"
+              allow="accelerometer; autoplay; fullscreen"
+              allowFullScreen
+            />
+          ) : value.type === 'gdrive' ? (
+            // Google Drive: preview iframe works for both images and videos
+            <iframe
+              src={getEmbedUrl(value)}
+              className="w-full aspect-video"
+              allow="autoplay; fullscreen"
+              allowFullScreen
             />
           ) : isVideoMeta(value) ? (
+            // Direct / UploadThing video
             <video
               src={previewUrl ?? ''}
               controls
@@ -168,6 +167,7 @@ export default function MediaInput({ value, onChange, accept = 'image', label = 
               className={`w-full ${previewFit === 'contain' ? 'max-h-64 object-contain' : 'max-h-48'}`}
             />
           ) : (
+            // Image
             previewUrl && (
               // eslint-disable-next-line @next/next/no-img-element
               <img

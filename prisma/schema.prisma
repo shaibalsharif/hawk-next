@@ -107,6 +107,7 @@ model PortfolioImage {
   rowSpan        Int           @default(1)
   objectFit      String        @default("cover")
   objectPosition String        @default("center")
+  thumbMeta      Json?         // optional custom thumbnail image for videos
 }
 
 // ─── Contact ─────────────────────────────────────────────────

@@ -1,12 +1,10 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/lib/auth'
-import { UTApi } from 'uploadthing/server'
+import { storage } from '@/lib/storage'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
-
-const utapi = new UTApi()
 
 const VALID_PAGE_SIZES = [10, 25, 50, 100]
 const VALID_SORT = ['date_desc', 'date_asc', 'name_asc', 'name_desc', 'size_asc', 'size_desc'] as const
@@ -22,6 +20,7 @@ interface RawMeta {
   type: string
   url: string
   key?: string
+  mimeType?: string
 }
 
 interface FileEntry {
@@ -30,6 +29,7 @@ interface FileEntry {
   url: string
   key?: string
   name: string
+  mimeType?: string
   sizeBytes?: number
   uploadedAt?: string
   usages: Usage[]
@@ -40,6 +40,18 @@ interface FileEntry {
 function metaLookupKey(meta: RawMeta): string {
   if (meta.type === 'uploadthing' && meta.key) return `ut:${meta.key}`
   return `${meta.type}:${meta.url}`
+}
+
+function mimeFromName(name: string): string | undefined {
+  const ext = name.split('.').pop()?.toLowerCase()
+  const map: Record<string, string> = {
+    jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+    gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', svg: 'image/svg+xml',
+    mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
+    avi: 'video/x-msvideo', mkv: 'video/x-matroska',
+    pdf: 'application/pdf',
+  }
+  return ext ? map[ext] : undefined
 }
 
 function nameFromUrl(url: string): string {
@@ -112,8 +124,11 @@ export async function GET(req: NextRequest) {
   for (const item of portfolioItems)
     if (item.coverMeta)
       addUsage(item.coverMeta as unknown as RawMeta, 'PortfolioItem', item.id, `Portfolio Cover — ${item.title}`)
-  for (const img of portfolioImages)
+  for (const img of portfolioImages) {
     addUsage(img.imageMeta as unknown as RawMeta, 'PortfolioImage', img.id, 'Portfolio Gallery Image')
+    if (img.thumbMeta)
+      addUsage(img.thumbMeta as unknown as RawMeta, 'PortfolioImage', img.id, 'Portfolio Gallery Thumbnail')
+  }
 
   for (const slide of homeSlides) {
     const syntheticKey = `youtube:${slide.videoId}`
@@ -123,18 +138,18 @@ export async function GET(req: NextRequest) {
   }
 
   // ── Fetch tracked MediaFiles + ALL UploadThing files ──────
-  const [mediaFiles, { files: utFiles }] = await Promise.all([
+  const [mediaFiles, storageFiles] = await Promise.all([
     prisma.mediaFile.findMany({ orderBy: { uploadedAt: 'desc' } }),
-    utapi.listFiles(),
+    storage.listFiles(),
   ])
 
   const mediaFilesByKey = new Map(mediaFiles.map((f) => [f.fileKey, f]))
-  const orphanUtFiles = utFiles.filter((f) => !mediaFilesByKey.has(f.key))
+  const orphanUtFiles = storageFiles.filter((f) => !mediaFilesByKey.has(f.key))
 
   const orphanUrlMap = new Map<string, string>()
   if (orphanUtFiles.length > 0) {
-    const { data } = await utapi.getFileUrls(orphanUtFiles.map((f) => f.key))
-    for (const item of data) orphanUrlMap.set(item.key, item.url)
+    const urls = await storage.getFileUrls(orphanUtFiles.map((f) => f.key))
+    for (const item of urls) orphanUrlMap.set(item.key, item.url)
   }
 
   // ── Build full entry list ─────────────────────────────────
@@ -145,12 +160,15 @@ export async function GET(req: NextRequest) {
     const lookupKey = `ut:${file.fileKey}`
     processedKeys.add(lookupKey)
     const usages = contentMap.get(lookupKey)?.usages ?? []
+    const fileName = nameFromUrl(file.fileUrl)
+    const mimeType = contentMap.get(lookupKey)?.meta.mimeType ?? mimeFromName(fileName)
     allEntries.push({
       id: file.id,
       source: 'uploadthing',
       url: file.fileUrl,
       key: file.fileKey,
-      name: nameFromUrl(file.fileUrl),
+      name: fileName,
+      mimeType,
       sizeBytes: file.size ?? undefined,
       uploadedAt: file.uploadedAt.toISOString(),
       usages,
@@ -171,6 +189,7 @@ export async function GET(req: NextRequest) {
       url,
       key: utFile.key,
       name: utFile.name,
+      mimeType: mimeFromName(utFile.name),
       sizeBytes: utFile.size,
       uploadedAt: new Date(utFile.uploadedAt).toISOString(),
       usages,
@@ -187,7 +206,7 @@ export async function GET(req: NextRequest) {
     if (src === 'youtube') name = `YouTube — ${meta.url}`
     else if (src === 'gdrive') name = `Google Drive — ${nameFromUrl(meta.url)}`
     else name = nameFromUrl(meta.url)
-    allEntries.push({ id: lookupKey, source: src, url: meta.url, key: meta.key, name, usages, isUnused: usages.length === 0, canDelete: src === 'uploadthing' && !!meta.key })
+    allEntries.push({ id: lookupKey, source: src, url: meta.url, key: meta.key, name, mimeType: meta.mimeType, usages, isUnused: usages.length === 0, canDelete: src === 'uploadthing' && !!meta.key })
   }
 
   // ── Counts for filter tabs (always from full list) ────────

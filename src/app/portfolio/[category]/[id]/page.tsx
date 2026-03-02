@@ -45,6 +45,7 @@ export default async function PortfolioItemPage({ params }: Props) {
       rowSpan: img.rowSpan,
       objectFit: img.objectFit,
       objectPosition: img.objectPosition,
+      thumbMeta: img.thumbMeta as MediaMeta | null ?? null,
     }))
 
   return (

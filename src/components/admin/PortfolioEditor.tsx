@@ -9,553 +9,21 @@ import {
   closestCenter,
   type DragEndEvent,
 } from '@dnd-kit/core'
-import {
-  SortableContext,
-  arrayMove,
-  rectSortingStrategy,
-  useSortable,
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
-import MediaInput from './MediaInput'
+import { SortableContext, arrayMove, rectSortingStrategy } from '@dnd-kit/sortable'
 import ConfirmModal from './ConfirmModal'
-import type { PortfolioCategory, PortfolioItem, PortfolioImage, MediaMeta } from '@/types'
-import { isVideoMeta } from '@/lib/media'
+import CategoryModal from './portfolio/CategoryModal'
+import ItemModal from './portfolio/ItemModal'
+import SortableCategoryCard from './portfolio/SortableCategoryCard'
+import SortablePortfolioItemCard from './portfolio/SortablePortfolioItemCard'
+import type { PortfolioCategory, PortfolioItem, PortfolioImage } from '@/types'
 
 interface Props { initialCategories: PortfolioCategory[] }
-
-const inputCls = "w-full bg-dark-3 border border-white/20 rounded px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-yellow-2"
-
-function GripIcon() {
-  return (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.75 5h16.5M3.75 12h16.5M3.75 19h16.5" />
-    </svg>
-  )
-}
-
-// ── Category Modal ─────────────────────────────────────────────────────────────
-
-function CategoryModal({ cat, onSave, onClose }: { cat: Partial<PortfolioCategory>; onSave: (d: Partial<PortfolioCategory>) => void; onClose: () => void }) {
-  const [form, setForm] = useState({ name: cat.name ?? '', details: cat.details ?? '', imageMeta: cat.imageMeta ?? null as MediaMeta | null })
-  return (
-    <div className="fixed inset-0 z-50 bg-black/70 overflow-y-auto">
-      <div className="min-h-full flex items-start justify-center p-4">
-        <div className="bg-dark-2 rounded-lg p-6 w-full max-w-md space-y-4 my-8">
-          <h3 className="text-lg font-oswald tracking-wider uppercase text-yellow-2">{cat.id ? 'Edit Category' : 'New Category'}</h3>
-          <div><label className="block text-xs text-white/50 font-oswald tracking-widest uppercase mb-1.5">Name</label><input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className={inputCls} /></div>
-          <div><label className="block text-xs text-white/50 font-oswald tracking-widest uppercase mb-1.5">Details</label><textarea value={form.details} onChange={(e) => setForm((f) => ({ ...f, details: e.target.value }))} className={`${inputCls} h-20 resize-none`} /></div>
-          <MediaInput value={form.imageMeta} onChange={(v) => setForm((f) => ({ ...f, imageMeta: v }))} label="Cover Image" />
-          <div className="flex gap-3 pt-2">
-            <button type="button" onClick={() => onSave(form)} className="flex-1 py-2 bg-yellow-2 text-dark-1 text-xs font-oswald tracking-wider uppercase rounded hover:bg-yellow-2/90 transition-colors">Save</button>
-            <button type="button" onClick={onClose} className="flex-1 py-2 border border-white/20 text-white/60 text-xs font-oswald tracking-wider uppercase rounded hover:border-white/40 transition-colors">Cancel</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Item Modal ──────────────────────────────────────────────────────────────────
-
-// ── Gallery Image Controls ──────────────────────────────────────────────────────
-
-const SIZE_PRESETS = [
-  { label: '1×1', colSpan: 1, rowSpan: 1 },
-  { label: 'Wide 2×1', colSpan: 2, rowSpan: 1 },
-  { label: 'Tall 1×2', colSpan: 1, rowSpan: 2 },
-  { label: 'Large 2×2', colSpan: 2, rowSpan: 2 },
-  { label: 'Hero 3×2', colSpan: 3, rowSpan: 2 },
-]
-
-const POSITION_DOTS = [
-  'top left', 'top center', 'top right',
-  'center left', 'center', 'center right',
-  'bottom left', 'bottom center', 'bottom right',
-]
-
-type GalleryImageState = { hidden: boolean; colSpan: number; rowSpan: number; objectFit: string; objectPosition: string }
-
-function GalleryImageCard({
-  img,
-  onDelete,
-  onStateChange,
-  isHovered,
-  onHoverChange,
-}: {
-  img: Partial<PortfolioImage>
-  onDelete: () => void
-  onStateChange?: (id: string, s: GalleryImageState) => void
-  isHovered?: boolean
-  onHoverChange?: (hovered: boolean) => void
-}) {
-  const [state, setState] = useState<GalleryImageState>({
-    hidden: img.hidden ?? false,
-    colSpan: img.colSpan ?? 1,
-    rowSpan: img.rowSpan ?? 1,
-    objectFit: img.objectFit ?? 'cover',
-    objectPosition: img.objectPosition ?? 'center',
-  })
-  const [savedFlash, setSavedFlash] = useState(false)
-  const [saving, setSaving] = useState(false)
-
-  const patch = async (patch: Partial<GalleryImageState>) => {
-    if (!img.id) return
-    const next = { ...state, ...patch }
-    setState(next)
-    onStateChange?.(img.id, next)
-    setSaving(true)
-    await fetch(`/api/content/portfolio/${img.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'image', data: next }),
-    })
-    setSaving(false)
-    setSavedFlash(true)
-    setTimeout(() => setSavedFlash(false), 1500)
-  }
-
-  const meta = img.imageMeta as MediaMeta | undefined
-  const isVideo = meta ? isVideoMeta(meta) : false
-
-  return (
-    <div
-      className={`bg-dark-3 rounded-lg overflow-hidden border transition-colors duration-200 ${isHovered ? 'border-yellow-2/60' : 'border-white/5'}`}
-      onMouseEnter={() => onHoverChange?.(true)}
-      onMouseLeave={() => onHoverChange?.(false)}
-    >
-      {/* Thumbnail */}
-      <div className="relative aspect-video bg-dark-2 group">
-        {meta && (
-          isVideo ? (
-            <video src={meta.url} muted playsInline
-              className="w-full h-full"
-              style={{ objectFit: state.objectFit as 'cover' | 'contain', objectPosition: state.objectPosition }}
-            />
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={meta.url} alt=""
-              className="w-full h-full"
-              style={{ objectFit: state.objectFit as 'cover' | 'contain', objectPosition: state.objectPosition }}
-            />
-          )
-        )}
-
-        {/* Hover highlight overlay (triggered from preview tile) */}
-        <div className={`absolute inset-0 pointer-events-none transition-opacity duration-200 bg-yellow-2/10 ${isHovered ? 'opacity-100' : 'opacity-0'}`} />
-
-        {/* Badges */}
-        <div className="absolute top-1.5 left-1.5 flex gap-1">
-          {state.hidden && (
-            <span className="text-[9px] font-oswald tracking-wider uppercase bg-black/80 text-white/40 px-1.5 py-0.5 rounded">Hidden</span>
-          )}
-          {savedFlash && (
-            <span className="text-[9px] font-oswald tracking-wider uppercase bg-green-600/90 text-white px-1.5 py-0.5 rounded">Saved ✓</span>
-          )}
-          {saving && (
-            <span className="text-[9px] font-oswald tracking-wider uppercase bg-dark-1/80 text-white/50 px-1.5 py-0.5 rounded">Saving…</span>
-          )}
-        </div>
-
-        {/* Delete */}
-        <button
-          onClick={onDelete}
-          className="absolute top-1 right-1 bg-black/70 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-all"
-        >
-          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-
-      {/* Controls */}
-      <div className="p-2.5 space-y-2.5">
-        {/* Row 1: Hidden toggle + Fit toggle */}
-        <div className="flex items-center gap-2">
-          {/* Hidden */}
-          <button
-            onClick={() => patch({ hidden: !state.hidden })}
-            title={state.hidden ? 'Hidden — click to show' : 'Visible — click to hide'}
-            className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-oswald tracking-wider uppercase border transition-colors flex-1 justify-center ${
-              state.hidden
-                ? 'border-white/10 text-white/30 bg-transparent'
-                : 'border-yellow-2/50 text-yellow-2 bg-yellow-2/5'
-            }`}
-          >
-            {state.hidden ? (
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
-              </svg>
-            ) : (
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            )}
-            {state.hidden ? 'Hidden' : 'Visible'}
-          </button>
-
-          {/* Fit */}
-          <div className="flex rounded overflow-hidden border border-white/10 flex-1">
-            {(['cover', 'contain'] as const).map((fit) => (
-              <button
-                key={fit}
-                onClick={() => patch({ objectFit: fit })}
-                className={`flex-1 py-1 text-[10px] font-oswald tracking-wider uppercase transition-colors ${
-                  state.objectFit === fit ? 'bg-yellow-2 text-dark-1' : 'text-white/40 hover:text-white'
-                }`}
-              >
-                {fit}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Row 2: Size presets */}
-        <div className="flex flex-wrap gap-1">
-          {SIZE_PRESETS.map((preset) => {
-            const active = state.colSpan === preset.colSpan && state.rowSpan === preset.rowSpan
-            return (
-              <button
-                key={preset.label}
-                onClick={() => patch({ colSpan: preset.colSpan, rowSpan: preset.rowSpan })}
-                className={`px-1.5 py-0.5 rounded text-[9px] font-oswald tracking-wider uppercase border transition-colors ${
-                  active ? 'bg-yellow-2 text-dark-1 border-yellow-2' : 'border-white/10 text-white/40 hover:border-white/30 hover:text-white/70'
-                }`}
-              >
-                {preset.label}
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Row 3: Object position 3×3 grid */}
-        <div>
-          <div className="grid grid-cols-3 gap-0.5 w-[60px]">
-            {POSITION_DOTS.map((pos) => (
-              <button
-                key={pos}
-                onClick={() => patch({ objectPosition: pos })}
-                title={pos}
-                className={`w-4 h-4 rounded-sm flex items-center justify-center transition-colors ${
-                  state.objectPosition === pos ? 'bg-yellow-2' : 'bg-white/10 hover:bg-white/25'
-                }`}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full ${state.objectPosition === pos ? 'bg-dark-1' : 'bg-white/50'}`} />
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function ItemModal({ item, categoryId, onSave, onClose }: { item: Partial<PortfolioItem>; categoryId: string; onSave: (d: Partial<PortfolioItem>) => void; onClose: () => void }) {
-  const [form, setForm] = useState({
-    title: item.title ?? '',
-    client: item.client ?? '',
-    year: item.year ?? new Date().getFullYear(),
-    role: item.role ?? '',
-    description: item.description ?? '',
-    takeaways: item.takeaways ?? [''],
-    coverMeta: item.coverMeta ?? null as MediaMeta | null,
-  })
-  const [tab, setTab] = useState<'details' | 'gallery'>('details')
-  const [images, setImages] = useState<Partial<PortfolioImage>[]>(item.images ?? [])
-  const [liveStates, setLiveStates] = useState<Record<string, GalleryImageState>>(() =>
-    Object.fromEntries(
-      (item.images ?? []).filter((img) => img.id).map((img) => [
-        img.id!,
-        { hidden: img.hidden ?? false, colSpan: img.colSpan ?? 1, rowSpan: img.rowSpan ?? 1, objectFit: img.objectFit ?? 'cover', objectPosition: img.objectPosition ?? 'center' },
-      ])
-    )
-  )
-  const handleStateChange = (id: string, s: GalleryImageState) => setLiveStates((prev) => ({ ...prev, [id]: s }))
-  const [hoveredImageId, setHoveredImageId] = useState<string | null>(null)
-  const [newImage, setNewImage] = useState<MediaMeta | null>(null)
-  const [deleteImageTarget, setDeleteImageTarget] = useState<string | null>(null)
-  const [deletingImage, setDeletingImage] = useState(false)
-
-  const setTakeaway = (i: number, v: string) => setForm((f) => { const t = [...f.takeaways]; t[i] = v; return { ...f, takeaways: t } })
-  const addTakeaway = () => setForm((f) => ({ ...f, takeaways: [...f.takeaways, ''] }))
-  const removeTakeaway = (i: number) => setForm((f) => ({ ...f, takeaways: f.takeaways.filter((_, j) => j !== i) }))
-
-  const addImage = async () => {
-    if (!newImage || !item.id) return
-    const res = await fetch('/api/content/portfolio', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'image', data: { itemId: item.id, imageMeta: newImage } }),
-    })
-    const created = await res.json()
-    setImages((imgs) => [...imgs, created])
-    if (created.id) {
-      setLiveStates((prev) => ({
-        ...prev,
-        [created.id]: { hidden: false, colSpan: 1, rowSpan: 1, objectFit: 'cover', objectPosition: 'center' },
-      }))
-    }
-    setNewImage(null)
-  }
-
-  const confirmRemoveImage = async () => {
-    if (!deleteImageTarget) return
-    setDeletingImage(true)
-    await fetch(`/api/content/portfolio/${deleteImageTarget}?type=image`, { method: 'DELETE' })
-    setImages((imgs) => imgs.filter((x) => x.id !== deleteImageTarget))
-    setLiveStates((prev) => { const n = { ...prev }; delete n[deleteImageTarget]; return n })
-    setDeletingImage(false)
-    setDeleteImageTarget(null)
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/70 overflow-y-auto">
-      <div className="min-h-full flex items-start justify-center p-4">
-        <div className="bg-dark-2 rounded-lg w-full max-w-4xl my-8">
-          <div className="flex gap-1 p-1 bg-dark-3 rounded-t-lg">
-            {(['details', 'gallery'] as const).map((t) => (
-              <button key={t} type="button" onClick={() => setTab(t)}
-                className={`flex-1 py-2 text-xs font-oswald tracking-wider uppercase rounded transition-colors ${tab === t ? 'bg-yellow-2 text-dark-1' : 'text-white/50 hover:text-white'}`}
-              >{t}</button>
-            ))}
-          </div>
-          <div className="p-6 space-y-4">
-            {tab === 'details' && (
-              <>
-                <h3 className="text-lg font-oswald tracking-wider uppercase text-yellow-2">{item.id ? 'Edit Item' : 'New Portfolio Item'}</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="col-span-2"><label className="block text-xs text-white/50 font-oswald tracking-widest uppercase mb-1.5">Title</label><input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} className={inputCls} /></div>
-                  <div><label className="block text-xs text-white/50 font-oswald tracking-widest uppercase mb-1.5">Client</label><input value={form.client} onChange={(e) => setForm((f) => ({ ...f, client: e.target.value }))} className={inputCls} /></div>
-                  <div><label className="block text-xs text-white/50 font-oswald tracking-widest uppercase mb-1.5">Year</label><input type="number" value={form.year} onChange={(e) => setForm((f) => ({ ...f, year: +e.target.value }))} className={inputCls} /></div>
-                  <div className="col-span-2"><label className="block text-xs text-white/50 font-oswald tracking-widest uppercase mb-1.5">Role</label><input value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))} className={inputCls} /></div>
-                  <div className="col-span-2"><label className="block text-xs text-white/50 font-oswald tracking-widest uppercase mb-1.5">Description</label><textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} className={`${inputCls} h-24 resize-none`} /></div>
-                </div>
-                <div>
-                  <label className="block text-xs text-white/50 font-oswald tracking-widest uppercase mb-1.5">Takeaways</label>
-                  {form.takeaways.map((t, i) => (
-                    <div key={i} className="flex gap-2 mb-2">
-                      <input value={t} onChange={(e) => setTakeaway(i, e.target.value)} className={inputCls} placeholder="e.g. Brand Identity" />
-                      <button type="button" onClick={() => removeTakeaway(i)} className="text-white/30 hover:text-red-400 transition-colors px-2">✕</button>
-                    </div>
-                  ))}
-                  <button type="button" onClick={addTakeaway} className="text-xs text-yellow-2 font-oswald tracking-wider uppercase hover:text-yellow-2/80 transition-colors">+ Add Point</button>
-                </div>
-                <MediaInput value={form.coverMeta} onChange={(v) => setForm((f) => ({ ...f, coverMeta: v }))} label="Cover Media" accept="any" />
-              </>
-            )}
-            {tab === 'gallery' && (
-              <div className="flex gap-5 items-start">
-                {/* Left col: sticky layout preview */}
-                {images.length > 0 && (
-                  <div className="w-44 flex-shrink-0 sticky top-0">
-                    <p className="text-[10px] font-oswald tracking-widest uppercase text-white/30 mb-2">Layout Preview</p>
-                    <div className="bg-dark-3 rounded p-2">
-                      <div
-                        className="grid gap-0.5"
-                        style={{ gridTemplateColumns: 'repeat(3, 1fr)', gridAutoRows: '22px' }}
-                      >
-                        {images.map((img, i) => {
-                          const live = img.id ? (liveStates[img.id] ?? img) : img
-                          if (live.hidden) return null
-                          const tileActive = hoveredImageId === img.id
-                          return (
-                            <div
-                              key={img.id ?? i}
-                              className={`rounded-sm border transition-colors duration-150 cursor-default ${tileActive ? 'bg-yellow-2/60 border-yellow-2' : 'bg-yellow-2/25 border-yellow-2/40'}`}
-                              style={{
-                                gridColumn: `span ${Math.min(live.colSpan ?? 1, 3)}`,
-                                gridRow: `span ${Math.min(live.rowSpan ?? 1, 2)}`,
-                              }}
-                              onMouseEnter={() => img.id && setHoveredImageId(img.id)}
-                              onMouseLeave={() => setHoveredImageId(null)}
-                            />
-                          )
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Right col: title + cards + add image */}
-                <div className="flex-1 min-w-0 space-y-3">
-                  <h3 className="text-lg font-oswald tracking-wider uppercase text-yellow-2">Gallery</h3>
-                  {!item.id && <p className="text-xs text-white/40">Save the item first before adding gallery images.</p>}
-
-                  <div className="grid grid-cols-2 gap-3">
-                    {images.map((img, i) => (
-                      <GalleryImageCard
-                        key={img.id ?? i}
-                        img={img}
-                        onDelete={() => img.id && setDeleteImageTarget(img.id)}
-                        onStateChange={handleStateChange}
-                        isHovered={hoveredImageId === img.id}
-                        onHoverChange={(h) => setHoveredImageId(h ? (img.id ?? null) : null)}
-                      />
-                    ))}
-                  </div>
-
-                  {item.id && (
-                    <div className="space-y-2">
-                      <MediaInput value={newImage} onChange={setNewImage} label="Add Image" />
-                      {newImage && (
-                        <button type="button" onClick={addImage} className="w-full py-2 bg-yellow-2 text-dark-1 text-xs font-oswald tracking-wider uppercase rounded hover:bg-yellow-2/90 transition-colors">
-                          Add to Gallery
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-            <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => onSave({
-                ...form,
-                categoryId,
-                images: images.map((img) => ({ ...img, ...(img.id ? liveStates[img.id] ?? {} : {}) })) as PortfolioImage[],
-              })} className="flex-1 py-2 bg-yellow-2 text-dark-1 text-xs font-oswald tracking-wider uppercase rounded hover:bg-yellow-2/90 transition-colors">Save</button>
-              <button type="button" onClick={onClose} className="flex-1 py-2 border border-white/20 text-white/60 text-xs font-oswald tracking-wider uppercase rounded hover:border-white/40 transition-colors">Close</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <ConfirmModal
-        open={deleteImageTarget !== null}
-        title="Delete Image"
-        message="Remove this image from the gallery? This cannot be undone."
-        onConfirm={confirmRemoveImage}
-        onCancel={() => setDeleteImageTarget(null)}
-        loading={deletingImage}
-        danger
-      />
-    </div>
-  )
-}
-
-// ── Sortable Category Card ──────────────────────────────────────────────────────
-
-function SortableCategoryCard({ cat, onOpen, onEdit, onDelete }: {
-  cat: PortfolioCategory
-  onOpen: () => void
-  onEdit: () => void
-  onDelete: () => void
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cat.id })
-  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }
-  const imgUrl = cat.imageMeta ? (cat.imageMeta as MediaMeta).url : null
-  const itemCount = (cat.items ?? []).length
-
-  return (
-    <div ref={setNodeRef} style={style} className="bg-dark-3 rounded-lg overflow-hidden flex flex-col group">
-      {/* div instead of button to avoid button-in-button hydration error */}
-      <div onClick={onOpen} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onOpen()} className="aspect-video relative bg-dark-2 overflow-hidden flex-shrink-0 w-full cursor-pointer">
-        {imgUrl ? (
-          isVideoMeta(cat.imageMeta) ? (
-            <video src={imgUrl} muted playsInline className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={imgUrl} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-          )
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <svg className="w-10 h-10 text-white/10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>
-          </div>
-        )}
-        <div className="absolute bottom-2 right-2 bg-black/70 text-white/70 text-[10px] font-oswald tracking-wider px-2 py-0.5 rounded">
-          {itemCount} {itemCount === 1 ? 'item' : 'items'}
-        </div>
-        {/* Drag handle — stop propagation so click-to-open still works */}
-        <button
-          {...attributes} {...listeners}
-          onClick={(e) => e.stopPropagation()}
-          className="absolute top-2 right-2 p-1.5 bg-black/60 rounded text-white/50 hover:text-white hover:bg-black/80 transition-colors cursor-grab active:cursor-grabbing"
-          title="Drag to reorder"
-        >
-          <GripIcon />
-        </button>
-      </div>
-      <div className="p-4 flex-1 flex flex-col gap-3">
-        <div>
-          <p className="font-oswald text-white tracking-wide leading-tight">{cat.name}</p>
-          {cat.details && <p className="text-xs text-white/40 mt-1 line-clamp-1">{cat.details}</p>}
-        </div>
-        <div className="flex gap-2 mt-auto">
-          <button onClick={onOpen} className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-yellow-2/10 text-yellow-2 text-xs font-oswald tracking-wider uppercase rounded hover:bg-yellow-2/20 transition-colors border border-yellow-2/20">
-            Open
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-          </button>
-          <button onClick={onEdit} className="p-2 bg-white/5 hover:bg-white/10 text-white/40 hover:text-white rounded transition-colors border border-white/10" title="Edit">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /></svg>
-          </button>
-          <button onClick={onDelete} className="p-2 bg-white/5 hover:bg-red-500/10 text-white/30 hover:text-red-400 rounded transition-colors border border-white/10 hover:border-red-500/20" title="Delete">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Sortable Portfolio Item Card ────────────────────────────────────────────────
-
-function SortablePortfolioItemCard({ item, onEdit, onDelete }: {
-  item: PortfolioItem
-  onEdit: () => void
-  onDelete: () => void
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
-  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }
-  const imgUrl = item.coverMeta ? (item.coverMeta as MediaMeta).url : null
-
-  return (
-    <div ref={setNodeRef} style={style} className="bg-dark-3 rounded-lg overflow-hidden flex flex-col group">
-      <div className="aspect-video relative bg-dark-2 overflow-hidden flex-shrink-0">
-        {imgUrl ? (
-          isVideoMeta(item.coverMeta) ? (
-            <video src={imgUrl} muted playsInline className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={imgUrl} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-          )
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <svg className="w-10 h-10 text-white/10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>
-          </div>
-        )}
-        <button {...attributes} {...listeners}
-          className="absolute top-2 right-2 p-1.5 bg-black/60 rounded text-white/50 hover:text-white hover:bg-black/80 transition-colors cursor-grab active:cursor-grabbing"
-          title="Drag to reorder"
-        >
-          <GripIcon />
-        </button>
-      </div>
-      <div className="p-4 flex-1 flex flex-col gap-3">
-        <div>
-          <p className="font-oswald text-white tracking-wide leading-tight truncate">{item.title}</p>
-          <p className="text-xs text-white/40 mt-0.5">{item.client}{item.client && item.year ? ' · ' : ''}{item.year}</p>
-        </div>
-        <div className="flex gap-2 mt-auto">
-          <button onClick={onEdit} className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-white/5 hover:bg-yellow-2/10 text-white/60 hover:text-yellow-2 text-xs font-oswald tracking-wider uppercase rounded transition-colors border border-white/10 hover:border-yellow-2/30">
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /></svg>
-            Edit
-          </button>
-          <button onClick={onDelete} className="p-2 bg-white/5 hover:bg-red-500/10 text-white/30 hover:text-red-400 rounded transition-colors border border-white/10 hover:border-red-500/20" title="Delete">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Slide animation variants ────────────────────────────────────────────────────
 
 const slideVariants = {
   enter: (dir: number) => ({ x: dir > 0 ? '60%' : '-60%', opacity: 0 }),
   center: { x: 0, opacity: 1 },
   exit: (dir: number) => ({ x: dir > 0 ? '-60%' : '60%', opacity: 0 }),
 }
-
-// ── Main Component ──────────────────────────────────────────────────────────────
 
 export default function PortfolioEditor({ initialCategories }: Props) {
   const [cats, setCats] = useState<PortfolioCategory[]>(initialCategories)
@@ -596,7 +64,8 @@ export default function PortfolioEditor({ initialCategories }: Props) {
     setSavingOrder('cats')
     try {
       await fetch('/api/content/portfolio', {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'category', order: cats.map((c, i) => ({ id: c.id, displayOrder: i })) }),
       })
       setIsDirtyCats(false)
@@ -610,7 +79,8 @@ export default function PortfolioEditor({ initialCategories }: Props) {
     setSavingOrder('items')
     try {
       await fetch('/api/content/portfolio', {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'item', order: items.map((x, i) => ({ id: x.id, displayOrder: i })) }),
       })
       setIsDirtyItems(false)
@@ -643,14 +113,16 @@ export default function PortfolioEditor({ initialCategories }: Props) {
   const saveCat = async (data: Partial<PortfolioCategory>) => {
     if (editingCat?.id) {
       const res = await fetch(`/api/content/portfolio/${editingCat.id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'category', data }),
       })
       const updated = await res.json()
       setCats((c) => c.map((x) => (x.id === editingCat.id ? { ...x, ...updated } : x)))
     } else {
       const res = await fetch('/api/content/portfolio', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'category', data }),
       })
       const created = await res.json()
@@ -664,14 +136,20 @@ export default function PortfolioEditor({ initialCategories }: Props) {
     const { catId } = editingItem
     if (editingItem.item.id) {
       const res = await fetch(`/api/content/portfolio/${editingItem.item.id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'item', data }),
       })
       const updated = await res.json()
-      setCats((c) => c.map((cat) => cat.id === catId ? { ...cat, items: (cat.items ?? []).map((x) => x.id === editingItem.item.id ? { ...x, ...updated, images: (data.images as PortfolioImage[]) ?? x.images } : x) } : cat))
+      setCats((c) => c.map((cat) =>
+        cat.id === catId
+          ? { ...cat, items: (cat.items ?? []).map((x) => x.id === editingItem.item.id ? { ...x, ...updated, images: (data.images as PortfolioImage[]) ?? x.images } : x) }
+          : cat
+      ))
     } else {
       const res = await fetch('/api/content/portfolio', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'item', data: { ...data, categoryId: catId } }),
       })
       const created = await res.json()
@@ -689,7 +167,11 @@ export default function PortfolioEditor({ initialCategories }: Props) {
       if (selectedCat?.id === deleteTarget.id) setView('categories')
     } else {
       await fetch(`/api/content/portfolio/${deleteTarget.id}?type=item`, { method: 'DELETE' })
-      setCats((c) => c.map((cat) => cat.id === deleteTarget.catId ? { ...cat, items: (cat.items ?? []).filter((x) => x.id !== deleteTarget.id) } : cat))
+      setCats((c) => c.map((cat) =>
+        cat.id === deleteTarget.catId
+          ? { ...cat, items: (cat.items ?? []).filter((x) => x.id !== deleteTarget.id) }
+          : cat
+      ))
     }
     setDeleting(false)
     setDeleteTarget(null)
@@ -720,14 +202,18 @@ export default function PortfolioEditor({ initialCategories }: Props) {
           {view === 'categories' && (
             <button onClick={() => setEditingCat({})}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-2 text-dark-1 text-xs font-oswald tracking-wider uppercase rounded hover:bg-yellow-2/90 transition-colors">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" /></svg>
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
               Add Category
             </button>
           )}
           {view === 'items' && currentCat && (
             <button onClick={() => setEditingItem({ item: {}, catId: currentCat.id })}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-2 text-dark-1 text-xs font-oswald tracking-wider uppercase rounded hover:bg-yellow-2/90 transition-colors">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" /></svg>
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
               Add Item
             </button>
           )}
@@ -749,9 +235,13 @@ export default function PortfolioEditor({ initialCategories }: Props) {
             >
               {cats.length === 0 ? (
                 <div className="bg-dark-2 rounded-lg py-16 text-center">
-                  <svg className="w-10 h-10 text-white/20 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" /></svg>
+                  <svg className="w-10 h-10 text-white/20 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
+                  </svg>
                   <p className="text-white/30 font-oswald tracking-widest uppercase text-sm">No categories yet</p>
-                  <button onClick={() => setEditingCat({})} className="mt-4 text-xs text-yellow-2 font-oswald tracking-wider uppercase hover:text-yellow-2/70 transition-colors">+ Add your first category</button>
+                  <button onClick={() => setEditingCat({})} className="mt-4 text-xs text-yellow-2 font-oswald tracking-wider uppercase hover:text-yellow-2/70 transition-colors">
+                    + Add your first category
+                  </button>
                 </div>
               ) : (
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEndCats}>
@@ -782,7 +272,9 @@ export default function PortfolioEditor({ initialCategories }: Props) {
               {/* Back bar */}
               <div className="flex items-center gap-3 mb-5 pb-4 border-b border-white/10">
                 <button onClick={goBack} className="flex items-center gap-2 text-white/50 hover:text-white transition-colors text-xs font-oswald tracking-wider uppercase">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
                   All Categories
                 </button>
                 <span className="text-white/20">/</span>
@@ -790,10 +282,14 @@ export default function PortfolioEditor({ initialCategories }: Props) {
                 {currentCat && (
                   <div className="ml-auto flex items-center gap-2">
                     <button onClick={() => currentCat && setEditingCat(currentCat)} className="p-1.5 text-white/30 hover:text-yellow-2 transition-colors" title="Edit category">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /></svg>
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                      </svg>
                     </button>
                     <button onClick={() => currentCat && setDeleteTarget({ id: currentCat.id, type: 'category', label: currentCat.name })} className="p-1.5 text-white/30 hover:text-red-400 transition-colors" title="Delete category">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                      </svg>
                     </button>
                   </div>
                 )}
@@ -802,7 +298,9 @@ export default function PortfolioEditor({ initialCategories }: Props) {
               {items.length === 0 ? (
                 <div className="bg-dark-2 rounded-lg py-16 text-center">
                   <p className="text-white/30 font-oswald tracking-widest uppercase text-sm">No items in this category</p>
-                  <button onClick={() => currentCat && setEditingItem({ item: {}, catId: currentCat.id })} className="mt-4 text-xs text-yellow-2 font-oswald tracking-wider uppercase hover:text-yellow-2/70 transition-colors">+ Add first item</button>
+                  <button onClick={() => currentCat && setEditingItem({ item: {}, catId: currentCat.id })} className="mt-4 text-xs text-yellow-2 font-oswald tracking-wider uppercase hover:text-yellow-2/70 transition-colors">
+                    + Add first item
+                  </button>
                 </div>
               ) : (
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEndItems}>
