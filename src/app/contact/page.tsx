@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { prisma } from '@/lib/prisma'
 import ContactCover from '@/components/contact/ContactCover'
 import ContactDetails from '@/components/contact/ContactDetails'
@@ -6,6 +7,17 @@ import Footer from '@/components/shared/Footer'
 import type { ContactCover as ContactCoverType, ContactItem, SocialLink, ContactType } from '@/types'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+  title: 'Contact Us',
+  description: 'Get in touch with Hawk Creative Studios to discuss your next FPV, aerial, or visual production project.',
+  alternates: { canonical: 'https://hawk-beta.vercel.app/contact' },
+  openGraph: {
+    title: 'Contact Us',
+    description: 'Get in touch with Hawk Creative Studios to discuss your next FPV, aerial, or visual production project.',
+    url: 'https://hawk-beta.vercel.app/contact',
+  },
+}
 
 export default async function ContactPage() {
   const [rawCover, rawItems, rawSocial] = await Promise.all([

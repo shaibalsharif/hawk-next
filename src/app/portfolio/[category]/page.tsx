@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { prisma } from '@/lib/prisma'
 import { notFound } from 'next/navigation'
 import ItemGrid from '@/components/portfolio/ItemGrid'
@@ -7,6 +8,29 @@ export const dynamic = 'force-dynamic'
 
 interface Props {
   params: Promise<{ category: string }>
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { category } = await params
+  const cat = await prisma.portfolioCategory.findFirst({
+    where: { id: { equals: category, mode: 'insensitive' } },
+  })
+  if (!cat) return { title: 'Portfolio' }
+
+  const cover = cat.imageMeta as MediaMeta | null
+  const description = cat.details || `Explore ${cat.name} work by Hawk Creative Studios — visual storytellers specializing in FPV cinematography and aerial photography.`
+
+  return {
+    title: cat.name,
+    description,
+    alternates: { canonical: `https://hawk-beta.vercel.app/portfolio/${category}` },
+    openGraph: {
+      title: cat.name,
+      description,
+      url: `https://hawk-beta.vercel.app/portfolio/${category}`,
+      ...(cover ? { images: [{ url: cover.url, width: 1200, height: 630, alt: cat.name }] } : {}),
+    },
+  }
 }
 
 export default async function CategoryPage({ params }: Props) {

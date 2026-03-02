@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { prisma } from '@/lib/prisma'
 import AboutCover from '@/components/about/AboutCover'
 import TeamMembers from '@/components/about/TeamMembers'
@@ -6,6 +7,17 @@ import Footer from '@/components/shared/Footer'
 import type { AboutCover as AboutCoverType, AboutInner, TeamMember, MediaMeta } from '@/types'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+  title: 'About Us',
+  description: 'Meet the team behind Hawk Creative Studios — passionate visual storytellers specializing in FPV cinematography and aerial photography.',
+  alternates: { canonical: 'https://hawk-beta.vercel.app/about' },
+  openGraph: {
+    title: 'About Us',
+    description: 'Meet the team behind Hawk Creative Studios — passionate visual storytellers specializing in FPV cinematography and aerial photography.',
+    url: 'https://hawk-beta.vercel.app/about',
+  },
+}
 
 export default async function AboutPage() {
   const [rawCover, rawInner, rawMembers] = await Promise.all([

@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { prisma } from '@/lib/prisma'
 import ServicesCoverSection from '@/components/services/ServicesCover'
 import OurWork from '@/components/services/OurWork'
@@ -7,6 +8,17 @@ import Footer from '@/components/shared/Footer'
 import type { ServicesCover, ServicesInner, ServiceItem, ClientItem, MediaMeta } from '@/types'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+  title: 'Our Services',
+  description: "Explore Hawk Creative Studios' full range of creative services — FPV drone filming, aerial photography, videography, and visual production.",
+  alternates: { canonical: 'https://hawk-beta.vercel.app/services' },
+  openGraph: {
+    title: 'Our Services',
+    description: "Explore Hawk Creative Studios' full range of creative services — FPV drone filming, aerial photography, videography, and visual production.",
+    url: 'https://hawk-beta.vercel.app/services',
+  },
+}
 
 export default async function ServicesPage() {
   const [rawCover, rawInner, rawItems, rawClients] = await Promise.all([
